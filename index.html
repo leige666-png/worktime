@@ -1,0 +1,323 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>审核管理系统</title>
+  <!-- ★ 版本号统一在此处修改，所有 CSS/JS 自动生效 ★ -->
+  <script>window.GLXT_VERSION = '20260427r114';</script>
+  <script>
+    (function injectAssets() {
+      var v = window.GLXT_VERSION;
+      var css = ['styles/main.css','styles/attendance.css','styles/dashboard.css','styles/overtime.css','styles/components.css'];
+      css.forEach(function(href) {
+        var el = document.createElement('link');
+        el.rel = 'stylesheet'; el.href = href + '?v=' + v;
+        document.head.appendChild(el);
+      });
+    })();
+  </script>
+</head>
+<body>
+  <!-- 顶部导航 -->
+  <header class="top-nav" id="topNav">
+    <div class="nav-left">
+      <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+          <rect x="2" y="4" width="14" height="1.5" rx="0.75" fill="currentColor"/>
+          <rect x="2" y="8.25" width="14" height="1.5" rx="0.75" fill="currentColor"/>
+          <rect x="2" y="12.5" width="14" height="1.5" rx="0.75" fill="currentColor"/>
+        </svg>
+      </button>
+      <div class="logo">
+        <div class="logo-icon">📋</div>
+        <span class="logo-text">审核管理系统</span>
+      </div>
+    </div>
+    <div class="nav-center">
+      <div class="global-search">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <circle cx="6" cy="6" r="4.5" stroke="#999" stroke-width="1.2"/>
+          <path d="M9.5 9.5L12 12" stroke="#999" stroke-width="1.2" stroke-linecap="round"/>
+        </svg>
+        <input type="text" placeholder="搜索人员、队列、客服话口径..." id="globalSearch" oninput="handleGlobalSearch(this.value)">
+        <div class="search-results" id="searchResults"></div>
+      </div>
+    </div>
+    <div class="nav-right">
+      <!-- 个人中心区域（点击打开抽屉） -->
+      <div class="nav-user-area" id="navUserArea" onclick="toggleUserDrawer()" title="个人中心" role="button" tabindex="0" aria-label="打开个人中心">
+        <img class="nav-user-avatar" id="navUserAvatar" src="https://ui-avatars.com/api/?name=未登录&background=CCCCCC&color=fff&size=32" alt="用户头像">
+        <div class="nav-user-info">
+          <div class="nav-user-name" id="navUserName">未登录</div>
+          <div class="nav-user-role" id="navUserRole" style="color:#999">点击登录</div>
+        </div>
+        <span class="nav-user-badge" id="navUserBadge" style="display:none"></span>
+        <svg class="nav-user-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+        </svg>
+      </div>
+    </div>
+  </header>
+
+  <!-- 主体布局 -->
+  <div class="main-layout">
+    <!-- 左侧侧边栏 -->
+    <aside class="sidebar" id="sidebar">
+      <nav class="sidebar-nav">
+
+        <!-- 考勤系统 -->
+        <div class="nav-group">
+          <div class="nav-group-title" onclick="toggleNavGroup(this)">
+            <div class="nav-group-icon nav-group-icon-blue">
+              <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+                <rect x="1.5" y="1.5" width="11" height="11" rx="1.5" stroke="currentColor" stroke-width="1.4"/>
+                <path d="M4.5 1.5V3.5M9.5 1.5V3.5M1.5 5.5H12.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <span>考勤系统</span>
+            <svg class="chevron" width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="nav-items">
+            <div class="nav-item active" onclick="showPage('schedule')" data-page="schedule">
+              <span class="nav-item-icon nav-item-icon-blue">
+                <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><rect x="1.5" y="2.5" width="11" height="10" rx="1" stroke="currentColor" stroke-width="1.3"/><path d="M4.5 1V4M9.5 1V4M1.5 6H12.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+              </span>
+              排班日历
+            </div>
+            <div class="nav-item" onclick="showPage('attendance')" data-page="attendance">
+              <span class="nav-item-icon nav-item-icon-indigo">
+                <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.3"/><path d="M7 4V7L9 9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+              </span>
+              考勤统计
+            </div>
+          </div>
+        </div>
+
+        <!-- 数据看板 -->
+        <div class="nav-group">
+          <div class="nav-group-title" onclick="toggleNavGroup(this)">
+            <div class="nav-group-icon nav-group-icon-green">
+              <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+                <rect x="1.5" y="7" width="3" height="5.5" rx="0.5" stroke="currentColor" stroke-width="1.4"/>
+                <rect x="5.5" y="4" width="3" height="8.5" rx="0.5" stroke="currentColor" stroke-width="1.4"/>
+                <rect x="9.5" y="1.5" width="3" height="11" rx="0.5" stroke="currentColor" stroke-width="1.4"/>
+              </svg>
+            </div>
+            <span>数据看板</span>
+            <svg class="chevron" width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="nav-items">
+            <div class="nav-item" onclick="showPage('dashboard')" data-page="dashboard">
+              <span class="nav-item-icon nav-item-icon-green">
+                <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.3"/><path d="M7 7L4 4.5M7 7L10 5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+              </span>
+              核心指标总览
+            </div>
+            <div class="nav-item" onclick="showPage('export')" data-page="export">
+              <span class="nav-item-icon nav-item-icon-purple">
+                <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M7 2V9M4 6L7 9L10 6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 11H12" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+              </span>
+              数据导出
+            </div>
+          </div>
+        </div>
+
+        <!-- 工时系统 -->
+        <div class="nav-group">
+          <div class="nav-group-title" onclick="toggleNavGroup(this)">
+            <div class="nav-group-icon nav-group-icon-orange">
+              <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+                <circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.4"/>
+                <path d="M7 4V7.5H10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <span>工时系统</span>
+            <svg class="chevron" width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="nav-items">
+            <div class="nav-item" onclick="showPage('worktime-register')" data-page="worktime-register">
+              <span class="nav-item-icon nav-item-icon-orange">
+                <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M3 7.5L6 10.5L11 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.2"/></svg>
+              </span>
+              工时登记
+            </div>
+            <div class="nav-item" onclick="showPage('worktime-data')" data-page="worktime-data">
+              <span class="nav-item-icon nav-item-icon-amber">
+                <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M2 3H5V6H2zM2 8H5V11H2zM7 3H12M7 5.5H10M7 8H12M7 10.5H10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+              </span>
+              工时数据
+            </div>
+          </div>
+        </div>
+
+        <!-- 系统管理 -->
+        <div class="nav-group">
+          <div class="nav-group-title" onclick="toggleNavGroup(this)">
+            <div class="nav-group-icon nav-group-icon-gray">
+              <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+                <circle cx="7" cy="7" r="2" stroke="currentColor" stroke-width="1.4"/>
+                <path d="M7 1.5V3M7 11V12.5M1.5 7H3M11 7H12.5M3.2 3.2L4.3 4.3M9.7 9.7L10.8 10.8M3.2 10.8L4.3 9.7M9.7 4.3L10.8 3.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <span>系统管理</span>
+            <svg class="chevron" width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="nav-items">
+            <div class="nav-item" onclick="showPage('messages')" data-page="messages">
+              <span class="nav-item-icon nav-item-icon-blue">
+                <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M2 3.5C2 2.67 2.67 2 3.5 2H10.5C11.33 2 12 2.67 12 3.5V8.5C12 9.33 11.33 10 10.5 10H8L6 12V10H3.5C2.67 10 2 9.33 2 8.5V3.5Z" stroke="currentColor" stroke-width="1.3"/></svg>
+              </span>
+              消息中心
+              <span class="nav-badge" id="sidebarMsgBadge">5</span>
+            </div>
+            <div class="nav-item" onclick="showPage('approval')" data-page="approval">
+              <span class="nav-item-icon nav-item-icon-orange">
+                <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M2 3.5C2 2.67 2.67 2 3.5 2H10.5C11.33 2 12 2.67 12 3.5V10.5C12 11.33 11.33 12 10.5 12H3.5C2.67 12 2 11.33 2 10.5V3.5Z" stroke="currentColor" stroke-width="1.3"/><path d="M4.5 7L6.5 9L9.5 5.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </span>
+              审批工作台
+              <span class="nav-badge" id="sidebarApprovalBadge">3</span>
+            </div>
+            <div class="nav-item" onclick="showPage('members')" data-page="members">
+              <span class="nav-item-icon nav-item-icon-cyan">
+                <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="5" r="2.5" stroke="currentColor" stroke-width="1.3"/><path d="M2 12C2 9.79 4.24 8 7 8C9.76 8 12 9.79 12 12" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+              </span>
+              人员管理
+            </div>
+            <div class="nav-item" onclick="showPage('queue-manage')" data-page="queue-manage">
+              <span class="nav-item-icon nav-item-icon-purple">
+                <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><rect x="1.5" y="2" width="11" height="2.5" rx="0.8" stroke="currentColor" stroke-width="1.2"/><rect x="1.5" y="5.8" width="11" height="2.5" rx="0.8" stroke="currentColor" stroke-width="1.2"/><rect x="1.5" y="9.5" width="11" height="2.5" rx="0.8" stroke="currentColor" stroke-width="1.2"/></svg>
+              </span>
+              队列管理
+            </div>
+            <div class="nav-item" onclick="showPage('logs')" data-page="logs">
+              <span class="nav-item-icon nav-item-icon-slate">
+                <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M2 3.5H12M2 7H12M2 10.5H12" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+              </span>
+              工作日志
+            </div>
+            <div class="nav-item" onclick="showPage('settings')" data-page="settings">
+              <span class="nav-item-icon nav-item-icon-gray">
+                <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="2" stroke="currentColor" stroke-width="1.3"/><path d="M7 1.5V3M7 11V12.5M1.5 7H3M11 7H12.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+              </span>
+              系统设置
+            </div>
+          </div>
+        </div>
+
+      </nav>
+
+      <!-- 侧边栏底部用户信息 -->
+      <div class="sidebar-footer" id="sidebarFooter" onclick="showProfilePage()" style="cursor:pointer" title="个人中心">
+        <img class="sidebar-footer-avatar" id="sidebarFooterAvatar" src="https://ui-avatars.com/api/?name=未登录&background=CCCCCC&color=fff&size=32" alt="用户头像">
+        <div class="sidebar-footer-info">
+          <div class="sidebar-footer-name" id="sidebarFooterName">未登录</div>
+          <div class="sidebar-footer-role" id="sidebarFooterRole" style="color:#999">—</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 右侧内容区 -->
+    <main class="content-area" id="contentArea">
+      <!-- 页面内容由JS动态渲染 -->
+    </main>
+  </div>
+
+  <!-- 全局弹窗容器 -->
+  <div class="modal-overlay" id="modalOverlay" onclick="closeModal()"></div>
+  <div class="modal-container" id="modalContainer"></div>
+
+  <!-- 右侧抽屉遮罩 -->
+  <div id="drawerOverlay" class="drawer-overlay" onclick="closeAllDrawers()" aria-hidden="true"></div>
+
+  <!-- 个人中心抽屉 -->
+  <div id="userDrawer" class="ud-drawer" style="display:none" role="dialog" aria-label="个人中心" aria-modal="true">
+    <!-- 抽屉头部（渐变磨砂） -->
+    <div class="ud-header">
+      <div class="ud-header-content">
+        <div class="ud-avatar-wrap">
+          <img id="drawerAvatar" src="" class="ud-avatar" alt="">
+          <div class="ud-online-dot" id="drawerOnlineDot"></div>
+        </div>
+        <div class="ud-header-info">
+          <div class="ud-header-name" id="drawerName">未登录</div>
+          <div class="ud-header-mis" id="drawerMis"></div>
+          <div class="ud-header-badges" id="drawerRoleBadge"></div>
+        </div>
+        <button onclick="closeAllDrawers()" class="ud-close-btn" aria-label="关闭个人中心">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </div>
+      <!-- 登录时长/团队信息快捷条 -->
+      <div class="ud-header-meta" id="drawerHeaderMeta"></div>
+    </div>
+    <!-- Tab 导航 -->
+    <div class="ud-tabs" id="drawerTabs" role="tablist" aria-label="个人中心导航">
+      <button class="ud-tab active" data-tab="account" onclick="switchDrawerTab('account',this)" role="tab" aria-selected="true" tabindex="0">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <span>概览</span>
+      </button>
+      <button class="ud-tab" data-tab="notify" onclick="switchDrawerTab('notify',this)" role="tab" aria-selected="false" tabindex="-1">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+        <span>通知</span>
+        <i class="ud-tab-badge" id="drawerNotifyBadge" style="display:none"></i>
+      </button>
+      <button class="ud-tab" data-tab="approval" onclick="switchDrawerTab('approval',this)" role="tab" aria-selected="false" tabindex="-1">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>
+        <span>审批</span>
+      </button>
+      <button class="ud-tab" data-tab="settings" onclick="switchDrawerTab('settings',this)" role="tab" aria-selected="false" tabindex="-1">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg>
+        <span>设置</span>
+      </button>
+    </div>
+    <!-- Tab 内容区 -->
+    <div class="ud-content" id="drawerContent" role="tabpanel">
+      <!-- 由 auth.js 动态渲染 -->
+    </div>
+  </div>
+
+  <!-- Toast通知 -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- 动态加载所有脚本（版本号由 GLXT_VERSION 统一控制）-->
+  <script>
+    (function loadScripts() {
+      var v = window.GLXT_VERSION;
+      // 加载顺序：数据层 → 持久化 → 排班(状态→卡片→核心) → 其他业务 → 权限
+      var scripts = [
+        'data/sso-user.js',
+        'data/members.js', 'data/queues.js', 'data/schedules.js', 'data/overtime.js',
+        'data/lz-string.min.js',
+        'data/xlsx.full.min.js',
+        'data/storage.js',
+        'js/app.js', 'js/schedule-state.js', 'js/schedule-cards.js', 'js/schedule.js', 'js/dashboard.js', 'js/overtime.js',
+        'js/approval.js', 'js/messages.js', 'js/members.js', 'js/queue-manage.js', 'js/reports.js',
+        'js/utils.js',
+        'js/auth.js'
+      ];
+      // 所有脚本加载完成后：先初始化页面，再检测大象中继服务
+      function onAllLoaded() {
+        // 所有 JS 已加载完毕，安全调用 initApp
+        if (typeof initApp === 'function') initApp();
+      }
+      function loadNext(i) {
+        if (i >= scripts.length) { onAllLoaded(); return; }
+        var el = document.createElement('script');
+        el.src = scripts[i] + '?v=' + v;
+        el.onload = function() { loadNext(i + 1); };
+        document.body.appendChild(el);
+      }
+      loadNext(0);
+    })();
+  </script>
+</body>
+</html>

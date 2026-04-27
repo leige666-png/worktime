@@ -1,0 +1,32 @@
+# 备份文件
+*.zip
+
+# 截图目录
+screenshots/
+
+# 编辑器
+.vscode/
+*.swp
+
+# 系统文件
+Thumbs.db
+.DS_Store
+
+# CatPaw/NoCode
+.catpaw/
+_cmd.json
+_eval.json
+nocode-project/
+
+# 异常文件（乱码文件名）
+{
+{const
+0){r[0].click()
+0){rows[0].click()
+el.textContent.trim()
+
+# PPT文档
+*.pptx
+
+# 旧版备份
+reports_r121_restored_20260423.js
