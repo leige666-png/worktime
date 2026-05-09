@@ -1,0 +1,7 @@
+[
+  {
+    "anomalyThreshold": 20,
+    "systemName": "工时管理系统",
+    "allowSelfRegister": true
+  }
+]
