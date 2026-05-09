@@ -1,0 +1,72 @@
+[
+  {
+    "id": "moy5z4xo3q8b01mc",
+    "name": "申述类",
+    "color": "#ff4d4f",
+    "defaultEfficiency": 10,
+    "description": "申述相关工损",
+    "isActive": true,
+    "sortOrder": 1,
+    "createdAt": "2026-05-09T09:51:13.596Z"
+  },
+  {
+    "id": "moy5z4xo1g3v8lrm",
+    "name": "试标类",
+    "color": "#fa8c16",
+    "defaultEfficiency": 15,
+    "description": "试标相关工损",
+    "isActive": true,
+    "sortOrder": 2,
+    "createdAt": "2026-05-09T09:51:13.596Z"
+  },
+  {
+    "id": "moy5z4xofl1rllfz",
+    "name": "客诉类",
+    "color": "#eb2f96",
+    "defaultEfficiency": 8,
+    "description": "客诉相关工损",
+    "isActive": true,
+    "sortOrder": 3,
+    "createdAt": "2026-05-09T09:51:13.596Z"
+  },
+  {
+    "id": "moy5z4xouz2uoqv7",
+    "name": "巡检类",
+    "color": "#722ed1",
+    "defaultEfficiency": 12,
+    "description": "巡检相关工损",
+    "isActive": true,
+    "sortOrder": 4,
+    "createdAt": "2026-05-09T09:51:13.596Z"
+  },
+  {
+    "id": "moy5z4xoquza9tqg",
+    "name": "培训类",
+    "color": "#13c2c2",
+    "defaultEfficiency": 20,
+    "description": "培训相关工损",
+    "isActive": true,
+    "sortOrder": 5,
+    "createdAt": "2026-05-09T09:51:13.596Z"
+  },
+  {
+    "id": "moy5z4xoxcg51gok",
+    "name": "会议类",
+    "color": "#2f54eb",
+    "defaultEfficiency": 0,
+    "description": "会议相关工损",
+    "isActive": true,
+    "sortOrder": 6,
+    "createdAt": "2026-05-09T09:51:13.596Z"
+  },
+  {
+    "id": "moy5z4xo1ii04tdz",
+    "name": "其他类",
+    "color": "#8c8c8c",
+    "defaultEfficiency": 10,
+    "description": "其他类型工损",
+    "isActive": true,
+    "sortOrder": 7,
+    "createdAt": "2026-05-09T09:51:13.596Z"
+  }
+]
