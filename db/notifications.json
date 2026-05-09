@@ -468,5 +468,25 @@
     "relatedId": "moy8536tz6sgghwq",
     "isRead": false,
     "createdAt": "2026-05-09T11:05:14.153Z"
+  },
+  {
+    "id": "moy8wdbhpspqrfk7",
+    "userId": "moy844mwg0vh3uhk",
+    "title": "❌ 加班申请被驳回",
+    "content": "您 2026-05-01 的加班申请（队列加班：12312）被驳回。原因：审批未通过",
+    "type": "record_rejected",
+    "relatedId": "moy850gmuf3n435o",
+    "isRead": false,
+    "createdAt": "2026-05-09T11:13:03.341Z"
+  },
+  {
+    "id": "moy8weq3nj91tayw",
+    "userId": "moy844mwg0vh3uhk",
+    "title": "❌ 加班申请被驳回",
+    "content": "您 2026-05-01 的加班申请（队列加班：12312）被驳回。原因：审批未通过",
+    "type": "record_rejected",
+    "relatedId": "moy850j4q1ypwnpp",
+    "isRead": false,
+    "createdAt": "2026-05-09T11:13:05.163Z"
   }
 ]
