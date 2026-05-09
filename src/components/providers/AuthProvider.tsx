@@ -13,12 +13,19 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const pathname = usePathname();
 
   useEffect(() => {
-    // 初始化系统（创建默认数据）
-    initializeSystem();
-
-    // 检查登录状态
-    const user = getCurrentUser();
-    setUser(user);
+    async function init() {
+      try {
+        // 初始化系统（确保远程 data 分支和默认数据存在）
+        await initializeSystem();
+        // 检查登录状态（从远程验证用户是否存在）
+        const user = await getCurrentUser();
+        setUser(user);
+      } catch (error) {
+        console.error('Init failed:', error);
+        setUser(null);
+      }
+    }
+    init();
   }, [setUser]);
 
   // 路由保护
@@ -37,7 +44,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   if (isLoading) {
     return (
       <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <Spin size="large" tip="加载中..." />
+        <Spin size="large" tip="系统连接中..." />
       </div>
     );
   }

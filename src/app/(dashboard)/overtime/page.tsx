@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, Table, Button, Modal, Form, Input, Select, DatePicker, TimePicker, InputNumber, message, Tag, Space, Typography, Popconfirm, Alert, Tabs } from 'antd';
+import { Card, Table, Button, Modal, Form, Input, Select, DatePicker, TimePicker, InputNumber, message, Tag, Space, Typography, Popconfirm, Alert, Tabs, Spin } from 'antd';
 import { PlusOutlined, CheckOutlined, CloseOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { useAuthStore } from '@/lib/store/auth';
 import { overtimeDB, overtimeTypeDB, userDB, groupDB, generateId, now, calcTimeDuration, calcWorkloadDuration, calcDeviation, configDB } from '@/lib/db';
@@ -15,16 +15,35 @@ export default function OvertimePage() {
   const [records, setRecords] = useState<OvertimeRecord[]>([]);
   const [pendingRecords, setPendingRecords] = useState<OvertimeRecord[]>([]);
   const [types, setTypes] = useState<OvertimeType[]>([]);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [form] = Form.useForm();
   const [activeTab, setActiveTab] = useState('my');
 
-  const loadData = () => {
+  const loadData = async () => {
     if (!user) return;
-    setRecords(overtimeDB.getByUser(user.id));
-    setTypes(overtimeTypeDB.getActive());
-    if (canReview()) {
-      setPendingRecords(overtimeDB.getPending());
+    try {
+      const [myRecords, activeTypes] = await Promise.all([
+        overtimeDB.getByUser(user.id),
+        overtimeTypeDB.getActive(),
+      ]);
+      setRecords(myRecords);
+      setTypes(activeTypes);
+
+      if (canReview()) {
+        const pending = await overtimeDB.getPending();
+        setPendingRecords(pending);
+      }
+
+      if (isAdmin()) {
+        const users = await userDB.getActive();
+        setAllUsers(users);
+      }
+    } catch (error) {
+      console.error('Load overtime data error:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -40,18 +59,19 @@ export default function OvertimePage() {
       const endTime = values.endTime.format('HH:mm');
       const timeDuration = calcTimeDuration(startTime, endTime);
       const calculatedDuration = calcWorkloadDuration(values.workload, values.efficiency);
-      const threshold = configDB.get().anomalyThreshold;
+      const cfg = await configDB.get();
+      const threshold = cfg.anomalyThreshold;
       const deviationPercent = calcDeviation(timeDuration, calculatedDuration);
       const hasAnomaly = deviationPercent > threshold;
 
       // 确定提交对象（管理员可代提交）
       let targetUser = user;
       if (values.userId && values.userId !== user.id && isAdmin()) {
-        const found = userDB.getById(values.userId);
+        const found = await userDB.getById(values.userId);
         if (found) targetUser = found;
       }
 
-      const group = targetUser.groupId ? groupDB.getById(targetUser.groupId) : null;
+      const group = targetUser.groupId ? await groupDB.getById(targetUser.groupId) : null;
 
       const record: OvertimeRecord = {
         id: generateId(),
@@ -85,7 +105,7 @@ export default function OvertimePage() {
         updatedAt: now(),
       };
 
-      overtimeDB.add(record);
+      await overtimeDB.add(record);
 
       if (hasAnomaly) {
         message.warning(`提交成功，但检测到时长异常（偏差${deviationPercent}%），已通知管理员核实`);
@@ -95,17 +115,17 @@ export default function OvertimePage() {
 
       setModalOpen(false);
       form.resetFields();
-      loadData();
+      await loadData();
     } catch (error) {
       // form validation error
     }
   };
 
-  const handleApprove = (id: string) => {
+  const handleApprove = async (id: string) => {
     if (!user) return;
-    overtimeDB.approve(id, user.id, user.name);
+    await overtimeDB.approve(id, user.id, user.name);
     message.success('已通过');
-    loadData();
+    await loadData();
   };
 
   const handleReject = (id: string) => {
@@ -115,11 +135,11 @@ export default function OvertimePage() {
       content: (
         <Input.TextArea id="reject-reason" placeholder="请输入驳回原因" rows={3} />
       ),
-      onOk: () => {
+      onOk: async () => {
         const reason = (document.getElementById('reject-reason') as HTMLTextAreaElement)?.value || '审批未通过';
-        overtimeDB.reject(id, user.id, user.name, reason);
+        await overtimeDB.reject(id, user.id, user.name, reason);
         message.success('已驳回');
-        loadData();
+        await loadData();
       },
     });
   };
@@ -162,7 +182,7 @@ export default function OvertimePage() {
     },
   ];
 
-  const allUsers = isAdmin() ? userDB.getActive() : [];
+  if (loading) return <div style={{ textAlign: 'center', padding: 60 }}><Spin tip="加载中..." /></div>;
 
   return (
     <div>
@@ -219,7 +239,7 @@ export default function OvertimePage() {
           {isAdmin() && (
             <Form.Item name="userId" label="提交对象（管理员可代提交）">
               <Select placeholder="默认为自己" allowClear>
-                {allUsers.map(u => (
+                {allUsers.map((u: any) => (
                   <Select.Option key={u.id} value={u.id}>{u.name}（{u.mis}）</Select.Option>
                 ))}
               </Select>

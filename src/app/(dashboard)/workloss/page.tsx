@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, Table, Button, Modal, Form, Input, Select, DatePicker, TimePicker, InputNumber, message, Tag, Space, Typography, Alert, Tabs } from 'antd';
+import { Card, Table, Button, Modal, Form, Input, Select, DatePicker, TimePicker, InputNumber, message, Tag, Space, Typography, Alert, Tabs, Spin } from 'antd';
 import { PlusOutlined, CheckOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { useAuthStore } from '@/lib/store/auth';
 import { worklossDB, worklossTypeDB, userDB, groupDB, generateId, now, calcTimeDuration, calcWorkloadDuration, calcDeviation, configDB } from '@/lib/db';
@@ -15,16 +15,35 @@ export default function WorklossPage() {
   const [records, setRecords] = useState<WorklossRecord[]>([]);
   const [pendingRecords, setPendingRecords] = useState<WorklossRecord[]>([]);
   const [types, setTypes] = useState<WorklossType[]>([]);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [form] = Form.useForm();
   const [activeTab, setActiveTab] = useState('my');
 
-  const loadData = () => {
+  const loadData = async () => {
     if (!user) return;
-    setRecords(worklossDB.getByUser(user.id));
-    setTypes(worklossTypeDB.getActive());
-    if (canReview()) {
-      setPendingRecords(worklossDB.getPending());
+    try {
+      const [myRecords, activeTypes] = await Promise.all([
+        worklossDB.getByUser(user.id),
+        worklossTypeDB.getActive(),
+      ]);
+      setRecords(myRecords);
+      setTypes(activeTypes);
+
+      if (canReview()) {
+        const pending = await worklossDB.getPending();
+        setPendingRecords(pending);
+      }
+
+      if (isAdmin()) {
+        const users = await userDB.getActive();
+        setAllUsers(users);
+      }
+    } catch (error) {
+      console.error('Load workloss data error:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -40,17 +59,18 @@ export default function WorklossPage() {
       const endTime = values.endTime.format('HH:mm');
       const timeDuration = calcTimeDuration(startTime, endTime);
       const calculatedDuration = calcWorkloadDuration(values.workload, values.efficiency);
-      const threshold = configDB.get().anomalyThreshold;
+      const cfg = await configDB.get();
+      const threshold = cfg.anomalyThreshold;
       const deviationPercent = calcDeviation(timeDuration, calculatedDuration);
       const hasAnomaly = calculatedDuration > 0 && deviationPercent > threshold;
 
       let targetUser = user;
       if (values.userId && values.userId !== user.id && isAdmin()) {
-        const found = userDB.getById(values.userId);
+        const found = await userDB.getById(values.userId);
         if (found) targetUser = found;
       }
 
-      const group = targetUser.groupId ? groupDB.getById(targetUser.groupId) : null;
+      const group = targetUser.groupId ? await groupDB.getById(targetUser.groupId) : null;
 
       const record: WorklossRecord = {
         id: generateId(),
@@ -84,7 +104,7 @@ export default function WorklossPage() {
         updatedAt: now(),
       };
 
-      worklossDB.add(record);
+      await worklossDB.add(record);
 
       if (hasAnomaly) {
         message.warning(`提交成功，但检测到时长异常（偏差${deviationPercent}%），已通知管理员核实`);
@@ -94,17 +114,17 @@ export default function WorklossPage() {
 
       setModalOpen(false);
       form.resetFields();
-      loadData();
+      await loadData();
     } catch (error) {
       // form validation error
     }
   };
 
-  const handleApprove = (id: string) => {
+  const handleApprove = async (id: string) => {
     if (!user) return;
-    worklossDB.approve(id, user.id, user.name);
+    await worklossDB.approve(id, user.id, user.name);
     message.success('已通过');
-    loadData();
+    await loadData();
   };
 
   const handleReject = (id: string) => {
@@ -112,11 +132,11 @@ export default function WorklossPage() {
     Modal.confirm({
       title: '驳回原因',
       content: <Input.TextArea id="wl-reject-reason" placeholder="请输入驳回原因" rows={3} />,
-      onOk: () => {
+      onOk: async () => {
         const reason = (document.getElementById('wl-reject-reason') as HTMLTextAreaElement)?.value || '审批未通过';
-        worklossDB.reject(id, user.id, user.name, reason);
+        await worklossDB.reject(id, user.id, user.name, reason);
         message.success('已驳回');
-        loadData();
+        await loadData();
       },
     });
   };
@@ -159,7 +179,7 @@ export default function WorklossPage() {
     },
   ];
 
-  const allUsers = isAdmin() ? userDB.getActive() : [];
+  if (loading) return <div style={{ textAlign: 'center', padding: 60 }}><Spin tip="加载中..." /></div>;
 
   return (
     <div>
@@ -215,7 +235,7 @@ export default function WorklossPage() {
           {isAdmin() && (
             <Form.Item name="userId" label="提交对象（管理员可代提交）">
               <Select placeholder="默认为自己" allowClear>
-                {allUsers.map(u => (
+                {allUsers.map((u: any) => (
                   <Select.Option key={u.id} value={u.id}>{u.name}（{u.mis}）</Select.Option>
                 ))}
               </Select>

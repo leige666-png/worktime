@@ -1,19 +1,20 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, Tabs, List, Tag, Button, Typography, Space, Statistic, Row, Col, Empty, Modal, Form, Input, Select, message, Badge } from 'antd';
-import { BellOutlined, UserOutlined, KeyOutlined, SafetyOutlined, UnorderedListOutlined } from '@ant-design/icons';
+import { Card, Tabs, List, Tag, Button, Typography, Space, Statistic, Row, Col, Empty, Modal, Form, Input, Select, message, Badge, Spin } from 'antd';
+import { UserOutlined, KeyOutlined, SafetyOutlined } from '@ant-design/icons';
 import { useAuthStore } from '@/lib/store/auth';
 import { notificationDB, overtimeDB, worklossDB, permissionRequestDB, taskDB, generateId, now } from '@/lib/db';
 import { changePassword } from '@/lib/supabase/auth';
 import { ROLE_LABELS } from '@/types/database';
-import type { Notification, TaskAssignment, UserRole } from '@/types/database';
+import type { Notification, TaskAssignment } from '@/types/database';
 import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
 
 export default function ProfilePage() {
   const { user } = useAuthStore();
+  const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [tasks, setTasks] = useState<TaskAssignment[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -21,36 +22,43 @@ export default function ProfilePage() {
   const [roleModal, setRoleModal] = useState(false);
   const [passwordForm] = Form.useForm();
   const [roleForm] = Form.useForm();
-
-  // 本月统计
   const [monthStats, setMonthStats] = useState({ overtimeHours: 0, worklossHours: 0, recordCount: 0 });
 
-  const loadData = () => {
+  const loadData = async () => {
     if (!user) return;
-    const notifs = notificationDB.getByUser(user.id);
-    setNotifications(notifs);
-    setUnreadCount(notifs.filter(n => !n.isRead).length);
-    setTasks(taskDB.getByUser(user.id));
+    try {
+      const notifs = await notificationDB.getByUser(user.id);
+      setNotifications(notifs);
+      setUnreadCount(notifs.filter(n => !n.isRead).length);
 
-    // 本月统计
-    const monthStart = dayjs().startOf('month').format('YYYY-MM-DD');
-    const monthEnd = dayjs().endOf('month').format('YYYY-MM-DD');
-    const myOvertime = overtimeDB.getByUser(user.id).filter(r => r.status === 'approved' && r.date >= monthStart && r.date <= monthEnd);
-    const myWorkloss = worklossDB.getByUser(user.id).filter(r => r.status === 'approved' && r.date >= monthStart && r.date <= monthEnd);
+      const userTasks = await taskDB.getByUser(user.id);
+      setTasks(userTasks);
 
-    setMonthStats({
-      overtimeHours: Math.round(myOvertime.reduce((s, r) => s + r.timeDuration, 0) / 60 * 10) / 10,
-      worklossHours: Math.round(myWorkloss.reduce((s, r) => s + r.timeDuration, 0) / 60 * 10) / 10,
-      recordCount: myOvertime.length + myWorkloss.length,
-    });
+      const monthStart = dayjs().startOf('month').format('YYYY-MM-DD');
+      const monthEnd = dayjs().endOf('month').format('YYYY-MM-DD');
+      const myOvertime = await overtimeDB.getByUser(user.id);
+      const myWorkloss = await worklossDB.getByUser(user.id);
+      const approvedOt = myOvertime.filter(r => r.status === 'approved' && r.date >= monthStart && r.date <= monthEnd);
+      const approvedWl = myWorkloss.filter(r => r.status === 'approved' && r.date >= monthStart && r.date <= monthEnd);
+
+      setMonthStats({
+        overtimeHours: Math.round(approvedOt.reduce((s, r) => s + r.timeDuration, 0) / 60 * 10) / 10,
+        worklossHours: Math.round(approvedWl.reduce((s, r) => s + r.timeDuration, 0) / 60 * 10) / 10,
+        recordCount: approvedOt.length + approvedWl.length,
+      });
+    } catch (error) {
+      console.error('Profile load error:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { loadData(); }, [user]);
 
-  const handleMarkAllRead = () => {
+  const handleMarkAllRead = async () => {
     if (!user) return;
-    notificationDB.markAllRead(user.id);
-    loadData();
+    await notificationDB.markAllRead(user.id);
+    await loadData();
     message.success('已全部标为已读');
   };
 
@@ -76,14 +84,13 @@ export default function ProfilePage() {
       const values = await roleForm.validateFields();
       if (!user) return;
 
-      // 检查是否有待处理的申请
-      const pending = permissionRequestDB.getByUser(user.id).filter(r => r.status === 'pending');
-      if (pending.length > 0) {
+      const pending = await permissionRequestDB.getByUser(user.id);
+      if (pending.filter(r => r.status === 'pending').length > 0) {
         message.warning('您已有待处理的权限申请，请等待审批');
         return;
       }
 
-      permissionRequestDB.add({
+      await permissionRequestDB.add({
         id: generateId(),
         userId: user.id,
         userName: user.name,
@@ -101,22 +108,20 @@ export default function ProfilePage() {
       message.success('权限申请已提交，等待管理员审批');
       setRoleModal(false);
       roleForm.resetFields();
-    } catch (error) {
-      // validation error
-    }
+    } catch { /* validation */ }
   };
 
-  const handleTaskStatus = (taskId: string, status: 'in_progress' | 'completed') => {
-    taskDB.update(taskId, { status, updatedAt: now() });
-    loadData();
+  const handleTaskStatus = async (taskId: string, status: 'in_progress' | 'completed') => {
+    await taskDB.update(taskId, { status, updatedAt: now() });
+    await loadData();
     message.success(status === 'completed' ? '任务已完成' : '已开始处理');
   };
 
   if (!user) return null;
+  if (loading) return <div style={{ textAlign: 'center', padding: 60 }}><Spin tip="加载中..." /></div>;
 
   return (
     <div>
-      {/* 个人信息卡片 */}
       <Card style={{ marginBottom: 16 }}>
         <Row gutter={24} align="middle">
           <Col>
@@ -144,38 +149,27 @@ export default function ProfilePage() {
         </Row>
       </Card>
 
-      {/* 本月统计 */}
       <Row gutter={16} style={{ marginBottom: 16 }}>
-        <Col span={8}>
-          <Card size="small"><Statistic title="本月加班" value={monthStats.overtimeHours} suffix="小时" /></Card>
-        </Col>
-        <Col span={8}>
-          <Card size="small"><Statistic title="本月工损" value={monthStats.worklossHours} suffix="小时" /></Card>
-        </Col>
-        <Col span={8}>
-          <Card size="small"><Statistic title="本月记录" value={monthStats.recordCount} suffix="条" /></Card>
-        </Col>
+        <Col span={8}><Card size="small"><Statistic title="本月加班" value={monthStats.overtimeHours} suffix="小时" /></Card></Col>
+        <Col span={8}><Card size="small"><Statistic title="本月工损" value={monthStats.worklossHours} suffix="小时" /></Card></Col>
+        <Col span={8}><Card size="small"><Statistic title="本月记录" value={monthStats.recordCount} suffix="条" /></Card></Col>
       </Row>
 
-      {/* 通知和任务 */}
       <Tabs
         items={[
           {
             key: 'notifications',
             label: <Badge count={unreadCount} size="small" offset={[8, -2]}>通知消息</Badge>,
             children: (
-              <Card
-                size="small"
-                extra={notifications.length > 0 && <Button type="link" size="small" onClick={handleMarkAllRead}>全部已读</Button>}
-              >
+              <Card size="small" extra={notifications.length > 0 && <Button type="link" size="small" onClick={handleMarkAllRead}>全部已读</Button>}>
                 {notifications.length > 0 ? (
                   <List
                     size="small"
                     dataSource={notifications.slice(0, 30)}
                     renderItem={(item) => (
                       <List.Item
-                        style={{ opacity: item.isRead ? 0.6 : 1 }}
-                        onClick={() => { notificationDB.markRead(item.id); loadData(); }}
+                        style={{ opacity: item.isRead ? 0.6 : 1, cursor: 'pointer' }}
+                        onClick={async () => { await notificationDB.markRead(item.id); await loadData(); }}
                       >
                         <List.Item.Meta
                           title={<Text style={{ fontSize: 13 }}>{!item.isRead && '🔴 '}{item.title}</Text>}
@@ -232,22 +226,14 @@ export default function ProfilePage() {
         ]}
       />
 
-      {/* 修改密码弹窗 */}
       <Modal title="修改密码" open={passwordModal} onOk={handleChangePassword} onCancel={() => setPasswordModal(false)} okText="确认修改">
         <Form form={passwordForm} layout="vertical">
-          <Form.Item name="oldPassword" label="原密码" rules={[{ required: true }]}>
-            <Input.Password />
-          </Form.Item>
-          <Form.Item name="newPassword" label="新密码" rules={[{ required: true, min: 4, message: '至少4位' }]}>
-            <Input.Password />
-          </Form.Item>
-          <Form.Item name="confirmPassword" label="确认新密码" rules={[{ required: true }]}>
-            <Input.Password />
-          </Form.Item>
+          <Form.Item name="oldPassword" label="原密码" rules={[{ required: true }]}><Input.Password /></Form.Item>
+          <Form.Item name="newPassword" label="新密码" rules={[{ required: true, min: 4, message: '至少4位' }]}><Input.Password /></Form.Item>
+          <Form.Item name="confirmPassword" label="确认新密码" rules={[{ required: true }]}><Input.Password /></Form.Item>
         </Form>
       </Modal>
 
-      {/* 申请权限弹窗 */}
       <Modal title="申请权限提升" open={roleModal} onOk={handleRequestRole} onCancel={() => setRoleModal(false)} okText="提交申请">
         <Form form={roleForm} layout="vertical">
           <Form.Item name="role" label="申请角色" rules={[{ required: true, message: '请选择' }]}>

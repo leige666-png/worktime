@@ -1,14 +1,17 @@
 /**
- * 工时管理系统 - 本地数据库服务
+ * 工时管理系统 - 远程数据库服务
  * 
- * 基于 localStorage 的完整数据持久化方案。
+ * 基于 GitHub API 的共享数据持久化方案。
+ * 所有用户读写同一份远程数据，实现多人协作。
+ * 
  * 设计要点：
- * 1. 统一的 CRUD 接口
- * 2. 事件系统实现模块联动
- * 3. 数据写入时自动触发关联更新（通知、统计等）
- * 4. 初始化时自动创建默认数据（默认类型等）
+ * 1. 统一的 CRUD 接口（异步）
+ * 2. 写入时自动触发关联更新（通知等）
+ * 3. 本地 session 仅存储当前登录状态
+ * 4. 初始化时自动创建默认数据
  */
 
+import { readFile, writeFile, ensureDataBranch, invalidateCache } from './github-storage';
 import type {
   User,
   Group,
@@ -22,21 +25,19 @@ import type {
   SystemConfig,
 } from '@/types/database';
 
-// ========== 存储 Key 定义 ==========
+// ========== 文件名定义 ==========
 
-const KEYS = {
-  users: 'wt_users',
-  groups: 'wt_groups',
-  overtimeTypes: 'wt_overtime_types',
-  worklossTypes: 'wt_workloss_types',
-  overtimeRecords: 'wt_overtime_records',
-  worklossRecords: 'wt_workloss_records',
-  notifications: 'wt_notifications',
-  permissionRequests: 'wt_permission_requests',
-  tasks: 'wt_tasks',
-  config: 'wt_config',
-  session: 'wt_session',
-  initialized: 'wt_initialized',
+const FILES = {
+  users: 'users.json',
+  groups: 'groups.json',
+  overtimeTypes: 'overtime-types.json',
+  worklossTypes: 'workloss-types.json',
+  overtimeRecords: 'overtime-records.json',
+  worklossRecords: 'workloss-records.json',
+  notifications: 'notifications.json',
+  permissionRequests: 'permission-requests.json',
+  tasks: 'tasks.json',
+  config: 'config.json',
 } as const;
 
 // ========== 工具函数 ==========
@@ -62,7 +63,7 @@ export function calcTimeDuration(startTime: string, endTime: string): number {
   const [sh, sm] = startTime.split(':').map(Number);
   const [eh, em] = endTime.split(':').map(Number);
   let diff = (eh * 60 + em) - (sh * 60 + sm);
-  if (diff < 0) diff += 24 * 60; // 跨天
+  if (diff < 0) diff += 24 * 60;
   return diff;
 }
 
@@ -78,160 +79,230 @@ export function calcDeviation(timeDuration: number, calculatedDuration: number):
   return Math.round(Math.abs(timeDuration - calculatedDuration) / calculatedDuration * 100);
 }
 
-// ========== 通用存取方法 ==========
-
-function getAll<T>(key: string): T[] {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function setAll<T>(key: string, data: T[]): void {
-  localStorage.setItem(key, JSON.stringify(data));
-}
-
-function getOne<T extends { id: string }>(key: string, id: string): T | null {
-  const all = getAll<T>(key);
-  return all.find(item => item.id === id) || null;
-}
-
-function addOne<T>(key: string, item: T): void {
-  const all = getAll<T>(key);
-  all.push(item);
-  setAll(key, all);
-}
-
-function updateOne<T extends { id: string }>(key: string, id: string, updates: Partial<T>): T | null {
-  const all = getAll<T>(key);
-  const index = all.findIndex(item => item.id === id);
-  if (index === -1) return null;
-  all[index] = { ...all[index], ...updates };
-  setAll(key, all);
-  return all[index];
-}
-
-function deleteOne<T extends { id: string }>(key: string, id: string): boolean {
-  const all = getAll<T>(key);
-  const filtered = all.filter(item => item.id !== id);
-  if (filtered.length === all.length) return false;
-  setAll(key, filtered);
-  return true;
-}
-
 // ========== 用户服务 ==========
 
 export const userDB = {
-  getAll: () => getAll<User>(KEYS.users),
-  getById: (id: string) => getOne<User>(KEYS.users, id),
-  getByMis: (mis: string): User | null => {
-    const users = getAll<User>(KEYS.users);
+  getAll: () => readFile<User>(FILES.users),
+  getById: async (id: string): Promise<User | null> => {
+    const users = await readFile<User>(FILES.users);
+    return users.find(u => u.id === id) || null;
+  },
+  getByMis: async (mis: string): Promise<User | null> => {
+    const users = await readFile<User>(FILES.users);
     return users.find(u => u.mis === mis) || null;
   },
-  add: (user: User) => addOne(KEYS.users, user),
-  update: (id: string, updates: Partial<User>) => updateOne<User>(KEYS.users, id, updates),
-  delete: (id: string) => deleteOne<User>(KEYS.users, id),
-  getByGroup: (groupId: string): User[] => {
-    return getAll<User>(KEYS.users).filter(u => u.groupId === groupId);
+  add: async (user: User) => {
+    const users = await readFile<User>(FILES.users);
+    users.push(user);
+    await writeFile(FILES.users, users);
   },
-  getActive: (): User[] => {
-    return getAll<User>(KEYS.users).filter(u => u.status === 'active');
+  update: async (id: string, updates: Partial<User>) => {
+    const users = await readFile<User>(FILES.users);
+    const index = users.findIndex(u => u.id === id);
+    if (index === -1) return null;
+    users[index] = { ...users[index], ...updates };
+    await writeFile(FILES.users, users);
+    return users[index];
   },
-  getAdmins: (): User[] => {
-    return getAll<User>(KEYS.users).filter(u => u.role === 'admin' && u.status === 'active');
+  delete: async (id: string) => {
+    const users = await readFile<User>(FILES.users);
+    const filtered = users.filter(u => u.id !== id);
+    await writeFile(FILES.users, filtered);
+  },
+  getByGroup: async (groupId: string): Promise<User[]> => {
+    const users = await readFile<User>(FILES.users);
+    return users.filter(u => u.groupId === groupId);
+  },
+  getActive: async (): Promise<User[]> => {
+    const users = await readFile<User>(FILES.users);
+    return users.filter(u => u.status === 'active');
+  },
+  getAdmins: async (): Promise<User[]> => {
+    const users = await readFile<User>(FILES.users);
+    return users.filter(u => u.role === 'admin' && u.status === 'active');
   },
 };
 
 // ========== 分组服务 ==========
 
 export const groupDB = {
-  getAll: () => getAll<Group>(KEYS.groups),
-  getById: (id: string) => getOne<Group>(KEYS.groups, id),
-  add: (group: Group) => addOne(KEYS.groups, group),
-  update: (id: string, updates: Partial<Group>) => updateOne<Group>(KEYS.groups, id, updates),
-  delete: (id: string) => {
-    // 删除分组时，将该分组下的用户的 groupId 置空
-    const users = getAll<User>(KEYS.users);
-    const updated = users.map(u => u.groupId === id ? { ...u, groupId: null } : u);
-    setAll(KEYS.users, updated);
-    return deleteOne<Group>(KEYS.groups, id);
+  getAll: () => readFile<Group>(FILES.groups),
+  getById: async (id: string): Promise<Group | null> => {
+    const groups = await readFile<Group>(FILES.groups);
+    return groups.find(g => g.id === id) || null;
   },
-  refreshMemberCount: (groupId: string) => {
-    const count = getAll<User>(KEYS.users).filter(u => u.groupId === groupId && u.status === 'active').length;
-    updateOne<Group>(KEYS.groups, groupId, { memberCount: count } as Partial<Group>);
+  add: async (group: Group) => {
+    const groups = await readFile<Group>(FILES.groups);
+    groups.push(group);
+    await writeFile(FILES.groups, groups);
+  },
+  update: async (id: string, updates: Partial<Group>) => {
+    const groups = await readFile<Group>(FILES.groups);
+    const index = groups.findIndex(g => g.id === id);
+    if (index === -1) return null;
+    groups[index] = { ...groups[index], ...updates };
+    await writeFile(FILES.groups, groups);
+    return groups[index];
+  },
+  delete: async (id: string) => {
+    // 删除分组时，将该分组下的用户的 groupId 置空
+    const users = await readFile<User>(FILES.users);
+    const updated = users.map(u => u.groupId === id ? { ...u, groupId: null } : u);
+    await writeFile(FILES.users, updated);
+    const groups = await readFile<Group>(FILES.groups);
+    await writeFile(FILES.groups, groups.filter(g => g.id !== id));
+  },
+  refreshMemberCount: async (groupId: string) => {
+    const users = await readFile<User>(FILES.users);
+    const count = users.filter(u => u.groupId === groupId && u.status === 'active').length;
+    const groups = await readFile<Group>(FILES.groups);
+    const index = groups.findIndex(g => g.id === groupId);
+    if (index !== -1) {
+      groups[index] = { ...groups[index], memberCount: count };
+      await writeFile(FILES.groups, groups);
+    }
   },
 };
 
 // ========== 加班类型服务 ==========
 
 export const overtimeTypeDB = {
-  getAll: () => getAll<OvertimeType>(KEYS.overtimeTypes),
-  getActive: () => getAll<OvertimeType>(KEYS.overtimeTypes).filter(t => t.isActive),
-  getById: (id: string) => getOne<OvertimeType>(KEYS.overtimeTypes, id),
-  add: (type: OvertimeType) => addOne(KEYS.overtimeTypes, type),
-  update: (id: string, updates: Partial<OvertimeType>) => updateOne<OvertimeType>(KEYS.overtimeTypes, id, updates),
-  delete: (id: string) => deleteOne<OvertimeType>(KEYS.overtimeTypes, id),
+  getAll: () => readFile<OvertimeType>(FILES.overtimeTypes),
+  getActive: async () => (await readFile<OvertimeType>(FILES.overtimeTypes)).filter(t => t.isActive),
+  getById: async (id: string) => {
+    const types = await readFile<OvertimeType>(FILES.overtimeTypes);
+    return types.find(t => t.id === id) || null;
+  },
+  add: async (type: OvertimeType) => {
+    const types = await readFile<OvertimeType>(FILES.overtimeTypes);
+    types.push(type);
+    await writeFile(FILES.overtimeTypes, types);
+  },
+  update: async (id: string, updates: Partial<OvertimeType>) => {
+    const types = await readFile<OvertimeType>(FILES.overtimeTypes);
+    const index = types.findIndex(t => t.id === id);
+    if (index === -1) return null;
+    types[index] = { ...types[index], ...updates };
+    await writeFile(FILES.overtimeTypes, types);
+    return types[index];
+  },
+  delete: async (id: string) => {
+    const types = await readFile<OvertimeType>(FILES.overtimeTypes);
+    await writeFile(FILES.overtimeTypes, types.filter(t => t.id !== id));
+  },
 };
 
 // ========== 工损类型服务 ==========
 
 export const worklossTypeDB = {
-  getAll: () => getAll<WorklossType>(KEYS.worklossTypes),
-  getActive: () => getAll<WorklossType>(KEYS.worklossTypes).filter(t => t.isActive),
-  getById: (id: string) => getOne<WorklossType>(KEYS.worklossTypes, id),
-  add: (type: WorklossType) => addOne(KEYS.worklossTypes, type),
-  update: (id: string, updates: Partial<WorklossType>) => updateOne<WorklossType>(KEYS.worklossTypes, id, updates),
-  delete: (id: string) => deleteOne<WorklossType>(KEYS.worklossTypes, id),
+  getAll: () => readFile<WorklossType>(FILES.worklossTypes),
+  getActive: async () => (await readFile<WorklossType>(FILES.worklossTypes)).filter(t => t.isActive),
+  getById: async (id: string) => {
+    const types = await readFile<WorklossType>(FILES.worklossTypes);
+    return types.find(t => t.id === id) || null;
+  },
+  add: async (type: WorklossType) => {
+    const types = await readFile<WorklossType>(FILES.worklossTypes);
+    types.push(type);
+    await writeFile(FILES.worklossTypes, types);
+  },
+  update: async (id: string, updates: Partial<WorklossType>) => {
+    const types = await readFile<WorklossType>(FILES.worklossTypes);
+    const index = types.findIndex(t => t.id === id);
+    if (index === -1) return null;
+    types[index] = { ...types[index], ...updates };
+    await writeFile(FILES.worklossTypes, types);
+    return types[index];
+  },
+  delete: async (id: string) => {
+    const types = await readFile<WorklossType>(FILES.worklossTypes);
+    await writeFile(FILES.worklossTypes, types.filter(t => t.id !== id));
+  },
 };
 
-// ========== 通知服务（先定义，供记录服务引用） ==========
+// ========== 通知服务 ==========
 
 export const notificationDB = {
-  getAll: () => getAll<Notification>(KEYS.notifications),
-  getByUser: (userId: string) => getAll<Notification>(KEYS.notifications)
-    .filter(n => n.userId === userId)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-  getUnread: (userId: string) => getAll<Notification>(KEYS.notifications).filter(n => n.userId === userId && !n.isRead),
-  getUnreadCount: (userId: string) => getAll<Notification>(KEYS.notifications).filter(n => n.userId === userId && !n.isRead).length,
-  add: (notification: Notification) => addOne(KEYS.notifications, notification),
-  markRead: (id: string) => updateOne<Notification>(KEYS.notifications, id, { isRead: true } as Partial<Notification>),
-  markAllRead: (userId: string) => {
-    const all = getAll<Notification>(KEYS.notifications);
-    const updated = all.map(n => n.userId === userId ? { ...n, isRead: true } : n);
-    setAll(KEYS.notifications, updated);
+  getAll: () => readFile<Notification>(FILES.notifications),
+  getByUser: async (userId: string) => {
+    const all = await readFile<Notification>(FILES.notifications);
+    return all.filter(n => n.userId === userId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   },
-  delete: (id: string) => deleteOne<Notification>(KEYS.notifications, id),
-  clearAll: (userId: string) => {
-    const all = getAll<Notification>(KEYS.notifications);
-    setAll(KEYS.notifications, all.filter(n => n.userId !== userId));
+  getUnread: async (userId: string) => {
+    const all = await readFile<Notification>(FILES.notifications);
+    return all.filter(n => n.userId === userId && !n.isRead);
+  },
+  getUnreadCount: async (userId: string) => {
+    const all = await readFile<Notification>(FILES.notifications);
+    return all.filter(n => n.userId === userId && !n.isRead).length;
+  },
+  add: async (notification: Notification) => {
+    const all = await readFile<Notification>(FILES.notifications);
+    all.push(notification);
+    await writeFile(FILES.notifications, all);
+  },
+  markRead: async (id: string) => {
+    const all = await readFile<Notification>(FILES.notifications);
+    const index = all.findIndex(n => n.id === id);
+    if (index !== -1) {
+      all[index] = { ...all[index], isRead: true };
+      await writeFile(FILES.notifications, all);
+    }
+  },
+  markAllRead: async (userId: string) => {
+    const all = await readFile<Notification>(FILES.notifications);
+    const updated = all.map(n => n.userId === userId ? { ...n, isRead: true } : n);
+    await writeFile(FILES.notifications, updated);
+  },
+  delete: async (id: string) => {
+    const all = await readFile<Notification>(FILES.notifications);
+    await writeFile(FILES.notifications, all.filter(n => n.id !== id));
+  },
+  clearAll: async (userId: string) => {
+    const all = await readFile<Notification>(FILES.notifications);
+    await writeFile(FILES.notifications, all.filter(n => n.userId !== userId));
   },
 };
 
 // ========== 加班记录服务 ==========
 
 export const overtimeDB = {
-  getAll: () => getAll<OvertimeRecord>(KEYS.overtimeRecords),
-  getById: (id: string) => getOne<OvertimeRecord>(KEYS.overtimeRecords, id),
-  getByUser: (userId: string) => getAll<OvertimeRecord>(KEYS.overtimeRecords)
-    .filter(r => r.userId === userId)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-  getPending: () => getAll<OvertimeRecord>(KEYS.overtimeRecords).filter(r => r.status === 'pending'),
-  getApproved: () => getAll<OvertimeRecord>(KEYS.overtimeRecords).filter(r => r.status === 'approved'),
-  getByDateRange: (start: string, end: string) => {
-    return getAll<OvertimeRecord>(KEYS.overtimeRecords).filter(r => r.date >= start && r.date <= end);
+  getAll: () => readFile<OvertimeRecord>(FILES.overtimeRecords),
+  getById: async (id: string) => {
+    const records = await readFile<OvertimeRecord>(FILES.overtimeRecords);
+    return records.find(r => r.id === id) || null;
   },
-  getByGroup: (groupId: string) => {
-    return getAll<OvertimeRecord>(KEYS.overtimeRecords).filter(r => r.groupId === groupId);
+  getByUser: async (userId: string) => {
+    const records = await readFile<OvertimeRecord>(FILES.overtimeRecords);
+    return records.filter(r => r.userId === userId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   },
-  add: (record: OvertimeRecord) => {
-    addOne(KEYS.overtimeRecords, record);
+  getPending: async () => {
+    const records = await readFile<OvertimeRecord>(FILES.overtimeRecords);
+    return records.filter(r => r.status === 'pending');
+  },
+  getApproved: async () => {
+    const records = await readFile<OvertimeRecord>(FILES.overtimeRecords);
+    return records.filter(r => r.status === 'approved');
+  },
+  getByDateRange: async (start: string, end: string) => {
+    const records = await readFile<OvertimeRecord>(FILES.overtimeRecords);
+    return records.filter(r => r.date >= start && r.date <= end);
+  },
+  getByGroup: async (groupId: string) => {
+    const records = await readFile<OvertimeRecord>(FILES.overtimeRecords);
+    return records.filter(r => r.groupId === groupId);
+  },
+  add: async (record: OvertimeRecord) => {
+    const records = await readFile<OvertimeRecord>(FILES.overtimeRecords);
+    records.push(record);
+    await writeFile(FILES.overtimeRecords, records);
+
     // 联动：异常警报
     if (record.hasAnomaly) {
-      const admins = userDB.getAdmins();
+      const admins = await userDB.getAdmins();
+      const notifications = await readFile<Notification>(FILES.notifications);
       admins.forEach(admin => {
-        notificationDB.add({
+        notifications.push({
           id: generateId(),
           userId: admin.id,
           title: '⚠️ 加班异常警报',
@@ -242,94 +313,126 @@ export const overtimeDB = {
           createdAt: now(),
         });
       });
+      await writeFile(FILES.notifications, notifications);
     }
+
     // 联动：待审批通知
-    const reviewers = getAll<User>(KEYS.users).filter(
+    const users = await readFile<User>(FILES.users);
+    const reviewers = users.filter(
       u => (u.role === 'admin' || u.role === 'reviewer' || u.role === 'team_lead') && u.status === 'active' && u.id !== record.submittedBy
     );
-    reviewers.forEach(reviewer => {
-      notificationDB.add({
-        id: generateId(),
-        userId: reviewer.id,
-        title: '新的加班申请待审批',
-        content: `${record.userName} 提交了 ${record.date} 的加班申请（${record.typeName}：${record.task}），时长${Math.round(record.timeDuration / 60 * 10) / 10}小时，请审批。`,
-        type: 'record_submitted',
-        relatedId: record.id,
-        isRead: false,
-        createdAt: now(),
+    if (reviewers.length > 0) {
+      const notifications = await readFile<Notification>(FILES.notifications);
+      reviewers.forEach(reviewer => {
+        notifications.push({
+          id: generateId(),
+          userId: reviewer.id,
+          title: '新的加班申请待审批',
+          content: `${record.userName} 提交了 ${record.date} 的加班申请（${record.typeName}：${record.task}），时长${Math.round(record.timeDuration / 60 * 10) / 10}小时，请审批。`,
+          type: 'record_submitted',
+          relatedId: record.id,
+          isRead: false,
+          createdAt: now(),
+        });
       });
+      await writeFile(FILES.notifications, notifications);
+    }
+  },
+  update: async (id: string, updates: Partial<OvertimeRecord>) => {
+    const records = await readFile<OvertimeRecord>(FILES.overtimeRecords);
+    const index = records.findIndex(r => r.id === id);
+    if (index === -1) return null;
+    records[index] = { ...records[index], ...updates };
+    await writeFile(FILES.overtimeRecords, records);
+    return records[index];
+  },
+  approve: async (id: string, reviewerId: string, reviewerName: string, comment?: string) => {
+    const records = await readFile<OvertimeRecord>(FILES.overtimeRecords);
+    const index = records.findIndex(r => r.id === id);
+    if (index === -1) return null;
+    records[index] = { ...records[index], status: 'approved', reviewerId, reviewerName, reviewedAt: now(), reviewComment: comment || null };
+    await writeFile(FILES.overtimeRecords, records);
+
+    // 通知提交人
+    const notifications = await readFile<Notification>(FILES.notifications);
+    notifications.push({
+      id: generateId(),
+      userId: records[index].userId,
+      title: '✅ 加班申请已通过',
+      content: `您 ${records[index].date} 的加班申请（${records[index].typeName}：${records[index].task}）已通过审批。${comment ? '审批意见：' + comment : ''}`,
+      type: 'record_approved',
+      relatedId: id,
+      isRead: false,
+      createdAt: now(),
     });
+    await writeFile(FILES.notifications, notifications);
+    return records[index];
   },
-  update: (id: string, updates: Partial<OvertimeRecord>) => updateOne<OvertimeRecord>(KEYS.overtimeRecords, id, updates),
-  approve: (id: string, reviewerId: string, reviewerName: string, comment?: string) => {
-    const record = updateOne<OvertimeRecord>(KEYS.overtimeRecords, id, {
-      status: 'approved',
-      reviewerId,
-      reviewerName,
-      reviewedAt: now(),
-      reviewComment: comment || null,
-    } as Partial<OvertimeRecord>);
-    if (record) {
-      notificationDB.add({
-        id: generateId(),
-        userId: record.userId,
-        title: '✅ 加班申请已通过',
-        content: `您 ${record.date} 的加班申请（${record.typeName}：${record.task}）已通过审批。${comment ? '审批意见：' + comment : ''}`,
-        type: 'record_approved',
-        relatedId: id,
-        isRead: false,
-        createdAt: now(),
-      });
-    }
-    return record;
+  reject: async (id: string, reviewerId: string, reviewerName: string, comment?: string) => {
+    const records = await readFile<OvertimeRecord>(FILES.overtimeRecords);
+    const index = records.findIndex(r => r.id === id);
+    if (index === -1) return null;
+    records[index] = { ...records[index], status: 'rejected', reviewerId, reviewerName, reviewedAt: now(), reviewComment: comment || '审批未通过' };
+    await writeFile(FILES.overtimeRecords, records);
+
+    const notifications = await readFile<Notification>(FILES.notifications);
+    notifications.push({
+      id: generateId(),
+      userId: records[index].userId,
+      title: '❌ 加班申请被驳回',
+      content: `您 ${records[index].date} 的加班申请（${records[index].typeName}：${records[index].task}）被驳回。原因：${comment || '未说明'}`,
+      type: 'record_rejected',
+      relatedId: id,
+      isRead: false,
+      createdAt: now(),
+    });
+    await writeFile(FILES.notifications, notifications);
+    return records[index];
   },
-  reject: (id: string, reviewerId: string, reviewerName: string, comment?: string) => {
-    const record = updateOne<OvertimeRecord>(KEYS.overtimeRecords, id, {
-      status: 'rejected',
-      reviewerId,
-      reviewerName,
-      reviewedAt: now(),
-      reviewComment: comment || '审批未通过',
-    } as Partial<OvertimeRecord>);
-    if (record) {
-      notificationDB.add({
-        id: generateId(),
-        userId: record.userId,
-        title: '❌ 加班申请被驳回',
-        content: `您 ${record.date} 的加班申请（${record.typeName}：${record.task}）被驳回。原因：${comment || '未说明'}`,
-        type: 'record_rejected',
-        relatedId: id,
-        isRead: false,
-        createdAt: now(),
-      });
-    }
-    return record;
+  delete: async (id: string) => {
+    const records = await readFile<OvertimeRecord>(FILES.overtimeRecords);
+    await writeFile(FILES.overtimeRecords, records.filter(r => r.id !== id));
   },
-  delete: (id: string) => deleteOne<OvertimeRecord>(KEYS.overtimeRecords, id),
 };
 
 // ========== 工损记录服务 ==========
 
 export const worklossDB = {
-  getAll: () => getAll<WorklossRecord>(KEYS.worklossRecords),
-  getById: (id: string) => getOne<WorklossRecord>(KEYS.worklossRecords, id),
-  getByUser: (userId: string) => getAll<WorklossRecord>(KEYS.worklossRecords)
-    .filter(r => r.userId === userId)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-  getPending: () => getAll<WorklossRecord>(KEYS.worklossRecords).filter(r => r.status === 'pending'),
-  getApproved: () => getAll<WorklossRecord>(KEYS.worklossRecords).filter(r => r.status === 'approved'),
-  getByDateRange: (start: string, end: string) => {
-    return getAll<WorklossRecord>(KEYS.worklossRecords).filter(r => r.date >= start && r.date <= end);
+  getAll: () => readFile<WorklossRecord>(FILES.worklossRecords),
+  getById: async (id: string) => {
+    const records = await readFile<WorklossRecord>(FILES.worklossRecords);
+    return records.find(r => r.id === id) || null;
   },
-  getByGroup: (groupId: string) => {
-    return getAll<WorklossRecord>(KEYS.worklossRecords).filter(r => r.groupId === groupId);
+  getByUser: async (userId: string) => {
+    const records = await readFile<WorklossRecord>(FILES.worklossRecords);
+    return records.filter(r => r.userId === userId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   },
-  add: (record: WorklossRecord) => {
-    addOne(KEYS.worklossRecords, record);
+  getPending: async () => {
+    const records = await readFile<WorklossRecord>(FILES.worklossRecords);
+    return records.filter(r => r.status === 'pending');
+  },
+  getApproved: async () => {
+    const records = await readFile<WorklossRecord>(FILES.worklossRecords);
+    return records.filter(r => r.status === 'approved');
+  },
+  getByDateRange: async (start: string, end: string) => {
+    const records = await readFile<WorklossRecord>(FILES.worklossRecords);
+    return records.filter(r => r.date >= start && r.date <= end);
+  },
+  getByGroup: async (groupId: string) => {
+    const records = await readFile<WorklossRecord>(FILES.worklossRecords);
+    return records.filter(r => r.groupId === groupId);
+  },
+  add: async (record: WorklossRecord) => {
+    const records = await readFile<WorklossRecord>(FILES.worklossRecords);
+    records.push(record);
+    await writeFile(FILES.worklossRecords, records);
+
     if (record.hasAnomaly) {
-      const admins = userDB.getAdmins();
+      const admins = await userDB.getAdmins();
+      const notifications = await readFile<Notification>(FILES.notifications);
       admins.forEach(admin => {
-        notificationDB.add({
+        notifications.push({
           id: generateId(),
           userId: admin.id,
           title: '⚠️ 工损异常警报',
@@ -340,83 +443,108 @@ export const worklossDB = {
           createdAt: now(),
         });
       });
+      await writeFile(FILES.notifications, notifications);
     }
-    const reviewers = getAll<User>(KEYS.users).filter(
+
+    const users = await readFile<User>(FILES.users);
+    const reviewers = users.filter(
       u => (u.role === 'admin' || u.role === 'reviewer' || u.role === 'team_lead') && u.status === 'active' && u.id !== record.submittedBy
     );
-    reviewers.forEach(reviewer => {
-      notificationDB.add({
-        id: generateId(),
-        userId: reviewer.id,
-        title: '新的工损申请待审批',
-        content: `${record.userName} 提交了 ${record.date} 的工损申请（${record.typeName}：${record.task}），时长${Math.round(record.timeDuration / 60 * 10) / 10}小时，请审批。`,
-        type: 'record_submitted',
-        relatedId: record.id,
-        isRead: false,
-        createdAt: now(),
+    if (reviewers.length > 0) {
+      const notifications = await readFile<Notification>(FILES.notifications);
+      reviewers.forEach(reviewer => {
+        notifications.push({
+          id: generateId(),
+          userId: reviewer.id,
+          title: '新的工损申请待审批',
+          content: `${record.userName} 提交了 ${record.date} 的工损申请（${record.typeName}：${record.task}），时长${Math.round(record.timeDuration / 60 * 10) / 10}小时，请审批。`,
+          type: 'record_submitted',
+          relatedId: record.id,
+          isRead: false,
+          createdAt: now(),
+        });
       });
+      await writeFile(FILES.notifications, notifications);
+    }
+  },
+  update: async (id: string, updates: Partial<WorklossRecord>) => {
+    const records = await readFile<WorklossRecord>(FILES.worklossRecords);
+    const index = records.findIndex(r => r.id === id);
+    if (index === -1) return null;
+    records[index] = { ...records[index], ...updates };
+    await writeFile(FILES.worklossRecords, records);
+    return records[index];
+  },
+  approve: async (id: string, reviewerId: string, reviewerName: string, comment?: string) => {
+    const records = await readFile<WorklossRecord>(FILES.worklossRecords);
+    const index = records.findIndex(r => r.id === id);
+    if (index === -1) return null;
+    records[index] = { ...records[index], status: 'approved', reviewerId, reviewerName, reviewedAt: now(), reviewComment: comment || null };
+    await writeFile(FILES.worklossRecords, records);
+
+    const notifications = await readFile<Notification>(FILES.notifications);
+    notifications.push({
+      id: generateId(),
+      userId: records[index].userId,
+      title: '✅ 工损申请已通过',
+      content: `您 ${records[index].date} 的工损申请（${records[index].typeName}：${records[index].task}）已通过审批。${comment ? '审批意见：' + comment : ''}`,
+      type: 'record_approved',
+      relatedId: id,
+      isRead: false,
+      createdAt: now(),
     });
+    await writeFile(FILES.notifications, notifications);
+    return records[index];
   },
-  update: (id: string, updates: Partial<WorklossRecord>) => updateOne<WorklossRecord>(KEYS.worklossRecords, id, updates),
-  approve: (id: string, reviewerId: string, reviewerName: string, comment?: string) => {
-    const record = updateOne<WorklossRecord>(KEYS.worklossRecords, id, {
-      status: 'approved',
-      reviewerId,
-      reviewerName,
-      reviewedAt: now(),
-      reviewComment: comment || null,
-    } as Partial<WorklossRecord>);
-    if (record) {
-      notificationDB.add({
-        id: generateId(),
-        userId: record.userId,
-        title: '✅ 工损申请已通过',
-        content: `您 ${record.date} 的工损申请（${record.typeName}：${record.task}）已通过审批。${comment ? '审批意见：' + comment : ''}`,
-        type: 'record_approved',
-        relatedId: id,
-        isRead: false,
-        createdAt: now(),
-      });
-    }
-    return record;
+  reject: async (id: string, reviewerId: string, reviewerName: string, comment?: string) => {
+    const records = await readFile<WorklossRecord>(FILES.worklossRecords);
+    const index = records.findIndex(r => r.id === id);
+    if (index === -1) return null;
+    records[index] = { ...records[index], status: 'rejected', reviewerId, reviewerName, reviewedAt: now(), reviewComment: comment || '审批未通过' };
+    await writeFile(FILES.worklossRecords, records);
+
+    const notifications = await readFile<Notification>(FILES.notifications);
+    notifications.push({
+      id: generateId(),
+      userId: records[index].userId,
+      title: '❌ 工损申请被驳回',
+      content: `您 ${records[index].date} 的工损申请（${records[index].typeName}：${records[index].task}）被驳回。原因：${comment || '未说明'}`,
+      type: 'record_rejected',
+      relatedId: id,
+      isRead: false,
+      createdAt: now(),
+    });
+    await writeFile(FILES.notifications, notifications);
+    return records[index];
   },
-  reject: (id: string, reviewerId: string, reviewerName: string, comment?: string) => {
-    const record = updateOne<WorklossRecord>(KEYS.worklossRecords, id, {
-      status: 'rejected',
-      reviewerId,
-      reviewerName,
-      reviewedAt: now(),
-      reviewComment: comment || '审批未通过',
-    } as Partial<WorklossRecord>);
-    if (record) {
-      notificationDB.add({
-        id: generateId(),
-        userId: record.userId,
-        title: '❌ 工损申请被驳回',
-        content: `您 ${record.date} 的工损申请（${record.typeName}：${record.task}）被驳回。原因：${comment || '未说明'}`,
-        type: 'record_rejected',
-        relatedId: id,
-        isRead: false,
-        createdAt: now(),
-      });
-    }
-    return record;
+  delete: async (id: string) => {
+    const records = await readFile<WorklossRecord>(FILES.worklossRecords);
+    await writeFile(FILES.worklossRecords, records.filter(r => r.id !== id));
   },
-  delete: (id: string) => deleteOne<WorklossRecord>(KEYS.worklossRecords, id),
 };
 
 // ========== 权限申请服务 ==========
 
 export const permissionRequestDB = {
-  getAll: () => getAll<PermissionRequest>(KEYS.permissionRequests),
-  getPending: () => getAll<PermissionRequest>(KEYS.permissionRequests).filter(r => r.status === 'pending'),
-  getByUser: (userId: string) => getAll<PermissionRequest>(KEYS.permissionRequests).filter(r => r.userId === userId),
-  add: (request: PermissionRequest) => {
-    addOne(KEYS.permissionRequests, request);
-    // 联动：通知所有管理员
-    const admins = userDB.getAdmins();
+  getAll: () => readFile<PermissionRequest>(FILES.permissionRequests),
+  getPending: async () => {
+    const all = await readFile<PermissionRequest>(FILES.permissionRequests);
+    return all.filter(r => r.status === 'pending');
+  },
+  getByUser: async (userId: string) => {
+    const all = await readFile<PermissionRequest>(FILES.permissionRequests);
+    return all.filter(r => r.userId === userId);
+  },
+  add: async (request: PermissionRequest) => {
+    const all = await readFile<PermissionRequest>(FILES.permissionRequests);
+    all.push(request);
+    await writeFile(FILES.permissionRequests, all);
+
+    // 通知管理员
+    const admins = await userDB.getAdmins();
+    const notifications = await readFile<Notification>(FILES.notifications);
     admins.forEach(admin => {
-      notificationDB.add({
+      notifications.push({
         id: generateId(),
         userId: admin.id,
         title: '📋 新的权限申请',
@@ -427,24 +555,23 @@ export const permissionRequestDB = {
         createdAt: now(),
       });
     });
+    await writeFile(FILES.notifications, notifications);
   },
-  approve: (id: string, reviewerId: string, reviewerName: string, comment?: string) => {
-    const request = getOne<PermissionRequest>(KEYS.permissionRequests, id);
-    if (!request) return null;
+  approve: async (id: string, reviewerId: string, reviewerName: string, comment?: string) => {
+    const all = await readFile<PermissionRequest>(FILES.permissionRequests);
+    const index = all.findIndex(r => r.id === id);
+    if (index === -1) return null;
+    const request = all[index];
 
-    updateOne<PermissionRequest>(KEYS.permissionRequests, id, {
-      status: 'approved',
-      reviewerId,
-      reviewerName,
-      reviewComment: comment || null,
-      reviewedAt: now(),
-    } as Partial<PermissionRequest>);
+    all[index] = { ...request, status: 'approved', reviewerId, reviewerName, reviewComment: comment || null, reviewedAt: now() };
+    await writeFile(FILES.permissionRequests, all);
 
-    // 联动：更新用户角色和状态
-    userDB.update(request.userId, { role: request.requestedRole, status: 'active' });
+    // 更新用户角色
+    await userDB.update(request.userId, { role: request.requestedRole, status: 'active' });
 
-    // 联动：通知申请人
-    notificationDB.add({
+    // 通知申请人
+    const notifications = await readFile<Notification>(FILES.notifications);
+    notifications.push({
       id: generateId(),
       userId: request.userId,
       title: '✅ 权限申请已通过',
@@ -454,35 +581,30 @@ export const permissionRequestDB = {
       isRead: false,
       createdAt: now(),
     });
-
+    await writeFile(FILES.notifications, notifications);
     return request;
   },
-  reject: (id: string, reviewerId: string, reviewerName: string, comment?: string) => {
-    const request = getOne<PermissionRequest>(KEYS.permissionRequests, id);
-    if (!request) return null;
+  reject: async (id: string, reviewerId: string, reviewerName: string, comment?: string) => {
+    const all = await readFile<PermissionRequest>(FILES.permissionRequests);
+    const index = all.findIndex(r => r.id === id);
+    if (index === -1) return null;
+    const request = all[index];
 
-    updateOne<PermissionRequest>(KEYS.permissionRequests, id, {
-      status: 'rejected',
-      reviewerId,
-      reviewerName,
-      reviewComment: comment || '申请未通过',
-      reviewedAt: now(),
-    } as Partial<PermissionRequest>);
+    all[index] = { ...request, status: 'rejected', reviewerId, reviewerName, reviewComment: comment || '申请未通过', reviewedAt: now() };
+    await writeFile(FILES.permissionRequests, all);
 
-    // 用户状态改为 active（普通成员）
-    userDB.update(request.userId, { status: 'active', role: 'member' });
-
-    notificationDB.add({
+    const notifications = await readFile<Notification>(FILES.notifications);
+    notifications.push({
       id: generateId(),
       userId: request.userId,
       title: '❌ 权限申请被拒绝',
-      content: `您的权限申请未通过。原因：${comment || '未说明'}。您当前为普通成员，可正常使用系统。`,
+      content: `您的权限申请未通过。原因：${comment || '未说明'}。`,
       type: 'permission_rejected',
       relatedId: id,
       isRead: false,
       createdAt: now(),
     });
-
+    await writeFile(FILES.notifications, notifications);
     return request;
   },
 };
@@ -490,15 +612,21 @@ export const permissionRequestDB = {
 // ========== 任务服务 ==========
 
 export const taskDB = {
-  getAll: () => getAll<TaskAssignment>(KEYS.tasks),
-  getByUser: (userId: string) => getAll<TaskAssignment>(KEYS.tasks)
-    .filter(t => t.userId === userId)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-  getById: (id: string) => getOne<TaskAssignment>(KEYS.tasks, id),
-  add: (task: TaskAssignment) => {
-    addOne(KEYS.tasks, task);
+  getAll: () => readFile<TaskAssignment>(FILES.tasks),
+  getByUser: async (userId: string) => {
+    const all = await readFile<TaskAssignment>(FILES.tasks);
+    return all.filter(t => t.userId === userId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  },
+  getById: async (id: string) => {
+    const all = await readFile<TaskAssignment>(FILES.tasks);
+    return all.find(t => t.id === id) || null;
+  },
+  add: async (task: TaskAssignment) => {
+    const all = await readFile<TaskAssignment>(FILES.tasks);
+    all.push(task);
+    await writeFile(FILES.tasks, all);
     // 联动：通知被分配人
-    notificationDB.add({
+    const notification: Notification = {
       id: generateId(),
       userId: task.userId,
       title: '📌 新任务分配',
@@ -507,29 +635,46 @@ export const taskDB = {
       relatedId: task.id,
       isRead: false,
       createdAt: now(),
-    });
+    };
+    const notifications = await readFile<Notification>(FILES.notifications);
+    notifications.push(notification);
+    await writeFile(FILES.notifications, notifications);
   },
-  update: (id: string, updates: Partial<TaskAssignment>) => updateOne<TaskAssignment>(KEYS.tasks, id, updates),
-  delete: (id: string) => deleteOne<TaskAssignment>(KEYS.tasks, id),
+  update: async (id: string, updates: Partial<TaskAssignment>) => {
+    const all = await readFile<TaskAssignment>(FILES.tasks);
+    const index = all.findIndex(t => t.id === id);
+    if (index === -1) return null;
+    all[index] = { ...all[index], ...updates };
+    await writeFile(FILES.tasks, all);
+    return all[index];
+  },
+  delete: async (id: string) => {
+    const all = await readFile<TaskAssignment>(FILES.tasks);
+    const filtered = all.filter(t => t.id !== id);
+    if (filtered.length === all.length) return false;
+    await writeFile(FILES.tasks, filtered);
+    return true;
+  },
 };
 
 // ========== 系统配置 ==========
 
 export const configDB = {
-  get: (): SystemConfig => {
+  get: async (): Promise<SystemConfig> => {
     try {
-      const raw = localStorage.getItem(KEYS.config);
-      if (raw) return JSON.parse(raw);
+      const data = await readFile<SystemConfig>('config.json');
+      if (data.length > 0) return data[0];
     } catch { /* ignore */ }
     return { anomalyThreshold: 20, systemName: '工时管理系统', allowSelfRegister: true };
   },
-  set: (config: Partial<SystemConfig>) => {
-    const current = configDB.get();
-    localStorage.setItem(KEYS.config, JSON.stringify({ ...current, ...config }));
+  set: async (config: Partial<SystemConfig>) => {
+    const current = await configDB.get();
+    const updated = { ...current, ...config };
+    await writeFile('config.json', [updated]);
   },
 };
 
-// ========== Session 管理 ==========
+// ========== Session 管理（仅本地） ==========
 
 interface SessionData {
   userId: string;
@@ -540,7 +685,7 @@ interface SessionData {
 export const sessionDB = {
   get: (): SessionData | null => {
     try {
-      const raw = localStorage.getItem(KEYS.session);
+      const raw = localStorage.getItem('wt_session');
       if (!raw) return null;
       const session: SessionData = JSON.parse(raw);
       // 30天过期
@@ -555,18 +700,22 @@ export const sessionDB = {
     }
   },
   set: (userId: string, mis: string) => {
-    localStorage.setItem(KEYS.session, JSON.stringify({ userId, mis, loginAt: now() }));
+    localStorage.setItem('wt_session', JSON.stringify({ userId, mis, loginAt: now() }));
   },
   clear: () => {
-    localStorage.removeItem(KEYS.session);
+    localStorage.removeItem('wt_session');
   },
 };
 
 // ========== 系统初始化 ==========
 
-export function initializeSystem(): void {
-  const isInitialized = localStorage.getItem(KEYS.initialized);
-  if (isInitialized) return;
+export async function initializeSystem(): Promise<void> {
+  // 确保 data 分支存在
+  await ensureDataBranch();
+
+  // 检查是否已初始化（远程有数据）
+  const types = await readFile<OvertimeType>(FILES.overtimeTypes);
+  if (types.length > 0) return; // 已初始化
 
   // 创建默认加班类型
   const defaultOvertimeTypes: OvertimeType[] = [
@@ -574,7 +723,7 @@ export function initializeSystem(): void {
     { id: generateId(), name: '标注加班', color: '#52c41a', defaultEfficiency: 25, description: '标注相关加班工作', isActive: true, sortOrder: 2, createdAt: now() },
     { id: generateId(), name: '其他加班', color: '#faad14', defaultEfficiency: 20, description: '其他类型加班', isActive: true, sortOrder: 3, createdAt: now() },
   ];
-  setAll(KEYS.overtimeTypes, defaultOvertimeTypes);
+  await writeFile(FILES.overtimeTypes, defaultOvertimeTypes);
 
   // 创建默认工损类型
   const defaultWorklossTypes: WorklossType[] = [
@@ -586,15 +735,8 @@ export function initializeSystem(): void {
     { id: generateId(), name: '会议类', color: '#2f54eb', defaultEfficiency: 0, description: '会议相关工损', isActive: true, sortOrder: 6, createdAt: now() },
     { id: generateId(), name: '其他类', color: '#8c8c8c', defaultEfficiency: 10, description: '其他类型工损', isActive: true, sortOrder: 7, createdAt: now() },
   ];
-  setAll(KEYS.worklossTypes, defaultWorklossTypes);
+  await writeFile(FILES.worklossTypes, defaultWorklossTypes);
 
   // 创建默认系统配置
-  localStorage.setItem(KEYS.config, JSON.stringify({
-    anomalyThreshold: 20,
-    systemName: '工时管理系统',
-    allowSelfRegister: true,
-  }));
-
-  // 标记已初始化
-  localStorage.setItem(KEYS.initialized, 'true');
+  await writeFile('config.json', [{ anomalyThreshold: 20, systemName: '工时管理系统', allowSelfRegister: true }]);
 }

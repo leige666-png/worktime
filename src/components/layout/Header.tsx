@@ -31,15 +31,15 @@ export default function AppHeader() {
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
-    if (user) {
-      setUnreadCount(notificationDB.getUnreadCount(user.id));
-    }
-    // 每5秒刷新未读数
-    const timer = setInterval(() => {
+    async function fetchUnread() {
       if (user) {
-        setUnreadCount(notificationDB.getUnreadCount(user.id));
+        const count = await notificationDB.getUnreadCount(user.id);
+        setUnreadCount(count);
       }
-    }, 5000);
+    }
+    fetchUnread();
+    // 每10秒刷新未读数
+    const timer = setInterval(fetchUnread, 10000);
     return () => clearInterval(timer);
   }, [user]);
 

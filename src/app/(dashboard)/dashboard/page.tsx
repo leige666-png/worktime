@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card, Row, Col, Statistic, Typography, List, Tag, Empty, Button, Space } from 'antd';
+import { Card, Row, Col, Statistic, Typography, List, Tag, Empty, Button, Space, Spin } from 'antd';
 import {
   ClockCircleOutlined,
   WarningOutlined,
@@ -19,6 +19,7 @@ const { Title, Text } = Typography;
 export default function DashboardPage() {
   const { user, canReview } = useAuthStore();
   const router = useRouter();
+  const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     monthOvertimeHours: 0,
     monthWorklossHours: 0,
@@ -31,46 +32,57 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!user) return;
 
-    const monthStart = dayjs().startOf('month').format('YYYY-MM-DD');
-    const monthEnd = dayjs().endOf('month').format('YYYY-MM-DD');
+    async function loadData() {
+      try {
+        const monthStart = dayjs().startOf('month').format('YYYY-MM-DD');
+        const monthEnd = dayjs().endOf('month').format('YYYY-MM-DD');
 
-    // 本月加班时长（已审批）
-    const overtimeRecords = overtimeDB.getByUser(user.id)
-      .filter(r => r.status === 'approved' && r.date >= monthStart && r.date <= monthEnd);
-    const monthOvertimeMinutes = overtimeRecords.reduce((sum, r) => sum + r.timeDuration, 0);
+        // 本月加班时长（已审批）
+        const myOvertime = await overtimeDB.getByUser(user!.id);
+        const overtimeRecords = myOvertime.filter(r => r.status === 'approved' && r.date >= monthStart && r.date <= monthEnd);
+        const monthOvertimeMinutes = overtimeRecords.reduce((sum, r) => sum + r.timeDuration, 0);
 
-    // 本月工损时长（已审批）
-    const worklossRecords = worklossDB.getByUser(user.id)
-      .filter(r => r.status === 'approved' && r.date >= monthStart && r.date <= monthEnd);
-    const monthWorklossMinutes = worklossRecords.reduce((sum, r) => sum + r.timeDuration, 0);
+        // 本月工损时长（已审批）
+        const myWorkloss = await worklossDB.getByUser(user!.id);
+        const worklossRecords = myWorkloss.filter(r => r.status === 'approved' && r.date >= monthStart && r.date <= monthEnd);
+        const monthWorklossMinutes = worklossRecords.reduce((sum, r) => sum + r.timeDuration, 0);
 
-    // 待审批数量（管理员/审核员可见）
-    const pendingApproval = canReview()
-      ? overtimeDB.getPending().length + worklossDB.getPending().length
-      : 0;
+        // 待审批数量
+        let pendingApproval = 0;
+        let pendingPermissions = 0;
+        if (canReview()) {
+          const pendingOt = await overtimeDB.getPending();
+          const pendingWl = await worklossDB.getPending();
+          pendingApproval = pendingOt.length + pendingWl.length;
+          const pendingPerm = await permissionRequestDB.getPending();
+          pendingPermissions = pendingPerm.length;
+        }
 
-    // 异常记录数
-    const allOvertime = overtimeDB.getByUser(user.id);
-    const allWorkloss = worklossDB.getByUser(user.id);
-    const anomalyCount = allOvertime.filter(r => r.hasAnomaly).length + allWorkloss.filter(r => r.hasAnomaly).length;
+        // 异常记录数
+        const anomalyCount = myOvertime.filter(r => r.hasAnomaly).length + myWorkloss.filter(r => r.hasAnomaly).length;
 
-    // 待审批权限申请
-    const pendingPermissions = canReview() ? permissionRequestDB.getPending().length : 0;
+        setStats({
+          monthOvertimeHours: Math.round(monthOvertimeMinutes / 60 * 10) / 10,
+          monthWorklossHours: Math.round(monthWorklossMinutes / 60 * 10) / 10,
+          pendingApproval,
+          anomalyCount,
+          pendingPermissions,
+        });
 
-    setStats({
-      monthOvertimeHours: Math.round(monthOvertimeMinutes / 60 * 10) / 10,
-      monthWorklossHours: Math.round(monthWorklossMinutes / 60 * 10) / 10,
-      pendingApproval,
-      anomalyCount,
-      pendingPermissions,
-    });
-
-    // 最近通知
-    const notifications = notificationDB.getByUser(user.id).slice(0, 8);
-    setRecentNotifications(notifications);
+        // 最近通知
+        const notifications = await notificationDB.getByUser(user!.id);
+        setRecentNotifications(notifications.slice(0, 8));
+      } catch (error) {
+        console.error('Dashboard load error:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
   }, [user, canReview]);
 
   if (!user) return null;
+  if (loading) return <div style={{ textAlign: 'center', padding: 60 }}><Spin tip="加载数据中..." /></div>;
 
   return (
     <div>
@@ -133,20 +145,10 @@ export default function DashboardPage() {
         <Col span={24}>
           <Card title="快捷操作" size="small">
             <Space wrap>
-              <Button type="primary" onClick={() => router.push('/overtime')}>
-                填报加班
-              </Button>
-              <Button onClick={() => router.push('/workloss')}>
-                填报工损
-              </Button>
-              {canReview() && (
-                <Button onClick={() => router.push('/statistics')}>
-                  查看统计
-                </Button>
-              )}
-              <Button onClick={() => router.push('/profile')}>
-                个人中心
-              </Button>
+              <Button type="primary" onClick={() => router.push('/overtime')}>填报加班</Button>
+              <Button onClick={() => router.push('/workloss')}>填报工损</Button>
+              {canReview() && <Button onClick={() => router.push('/statistics')}>查看统计</Button>}
+              <Button onClick={() => router.push('/profile')}>个人中心</Button>
             </Space>
           </Card>
         </Col>
