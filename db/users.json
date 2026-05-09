@@ -1,1 +1,15 @@
-[]
+[
+  {
+    "id": "moy6h2ctzgp8lj0y",
+    "mis": "test_admin_1778321110061",
+    "name": "测试管理员A",
+    "avatar": null,
+    "role": "admin",
+    "groupId": null,
+    "status": "active",
+    "passwordHash": "2a3afc9470845850fda0c54a23c43be51ff480366fde427ddc025347d5cb68e7",
+    "createdAt": "2026-05-09T10:05:10.062Z",
+    "lastLogin": "2026-05-09T10:05:10.063Z",
+    "loginCount": 1
+  }
+]
