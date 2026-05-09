@@ -1,0 +1,18 @@
+# Plus 构建配置文件
+# 文档: https://km.sankuai.com/collabpage/2759745088
+
+# 构建阶段配置
+build:
+    tools:
+        node: 22    # 构建阶段安装 Node.js 22
+    cmd:
+        - npm install --registry=http://r.npm.sankuai.com
+        - npm run build
+
+# 部署阶段配置
+autodeploy:
+    hulkos: centos7
+    tools:
+        node: 22    # 部署镜像中安装 Node.js 22
+    cmd:
+        - bash deploy/run.sh

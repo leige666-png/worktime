@@ -1,0 +1,38 @@
+# 依赖
+node_modules
+.pnp
+.pnp.js
+
+# 构建产物
+.next
+out
+
+# 测试
+coverage
+
+# 环境变量（不要打入镜像，通过运行时注入）
+.env
+.env.local
+.env.production.local
+.env.development.local
+
+# 编辑器
+.vscode
+.idea
+*.swp
+*.swo
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
+
+# 部署脚本（Docker 构建不需要）
+deploy/
+
+# 文档
+*.md
+DEPLOY.md

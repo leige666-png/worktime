@@ -1,0 +1,17 @@
+# Nest Serverless 平台配置文件
+# 文档: https://km.sankuai.com/collabpage/1839675169
+appKey: com.sankuai.worktime.web
+
+# 运行时配置
+provider:
+  runtime: nodejs
+  envs:
+    NODE_ENV: production
+
+# 模板类型: Next.js SSR
+templateType: web_nodejs_nextjs
+
+# 函数配置
+functions:
+  main:
+    handler: nest.main
