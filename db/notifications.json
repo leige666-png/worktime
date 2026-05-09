@@ -6,7 +6,7 @@
     "content": "吴静文 的加班记录存在时长偏差（偏差100%），时间计算61分钟 vs 量级计算33578分钟。事项：12312",
     "type": "anomaly_alert",
     "relatedId": "moy84zy0gfq2nuig",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:49.629Z"
   },
   {
@@ -16,7 +16,7 @@
     "content": "吴静文 的加班记录存在时长偏差（偏差100%），时间计算61分钟 vs 量级计算33578分钟。事项：12312",
     "type": "anomaly_alert",
     "relatedId": "moy850umvawatdkx",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:49.679Z"
   },
   {
@@ -26,7 +26,7 @@
     "content": "吴静文 的加班记录存在时长偏差（偏差100%），时间计算61分钟 vs 量级计算33578分钟。事项：12312",
     "type": "anomaly_alert",
     "relatedId": "moy850gmuf3n435o",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:49.680Z"
   },
   {
@@ -36,7 +36,7 @@
     "content": "吴静文 的加班记录存在时长偏差（偏差100%），时间计算61分钟 vs 量级计算33578分钟。事项：12312",
     "type": "anomaly_alert",
     "relatedId": "moy851lu01foh4it",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:50.246Z"
   },
   {
@@ -46,7 +46,7 @@
     "content": "吴静文 的加班记录存在时长偏差（偏差100%），时间计算61分钟 vs 量级计算33578分钟。事项：12312",
     "type": "anomaly_alert",
     "relatedId": "moy850j4q1ypwnpp",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:50.289Z"
   },
   {
@@ -56,7 +56,7 @@
     "content": "吴静文 的加班记录存在时长偏差（偏差100%），时间计算61分钟 vs 量级计算33578分钟。事项：12312",
     "type": "anomaly_alert",
     "relatedId": "moy852dlvuo54t5t",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:50.291Z"
   },
   {
@@ -66,7 +66,7 @@
     "content": "吴静文 的加班记录存在时长偏差（偏差100%），时间计算61分钟 vs 量级计算33578分钟。事项：12312",
     "type": "anomaly_alert",
     "relatedId": "moy851u9m9mhryd1",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:50.297Z"
   },
   {
@@ -76,7 +76,7 @@
     "content": "吴静文 的加班记录存在时长偏差（偏差100%），时间计算61分钟 vs 量级计算33578分钟。事项：12312",
     "type": "anomaly_alert",
     "relatedId": "moy851ppixlvpcuu",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:50.377Z"
   },
   {
@@ -86,7 +86,7 @@
     "content": "吴静文 的加班记录存在时长偏差（偏差100%），时间计算61分钟 vs 量级计算33578分钟。事项：12312",
     "type": "anomaly_alert",
     "relatedId": "moy851xffvxr6rts",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:50.446Z"
   },
   {
@@ -96,7 +96,7 @@
     "content": "吴静文 的加班记录存在时长偏差（偏差100%），时间计算61分钟 vs 量级计算33578分钟。事项：12312",
     "type": "anomaly_alert",
     "relatedId": "moy852jvxdoo2chi",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:50.699Z"
   },
   {
@@ -106,7 +106,7 @@
     "content": "吴静文 提交了 2026-05-01 的加班申请（队列加班：12312），时长1小时，请审批。",
     "type": "record_submitted",
     "relatedId": "moy851lu01foh4it",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:51.033Z"
   },
   {
@@ -116,7 +116,7 @@
     "content": "吴静文 的加班记录存在时长偏差（偏差100%），时间计算61分钟 vs 量级计算33578分钟。事项：12312",
     "type": "anomaly_alert",
     "relatedId": "moy852gjaped4ame",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:51.070Z"
   },
   {
@@ -126,7 +126,7 @@
     "content": "吴静文 的加班记录存在时长偏差（偏差100%），时间计算61分钟 vs 量级计算33578分钟。事项：12312",
     "type": "anomaly_alert",
     "relatedId": "moy852nhhscadl0z",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:51.079Z"
   },
   {
@@ -136,7 +136,7 @@
     "content": "吴静文 的加班记录存在时长偏差（偏差100%），时间计算61分钟 vs 量级计算33578分钟。事项：12312",
     "type": "anomaly_alert",
     "relatedId": "moy852ub959uutur",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:51.318Z"
   },
   {
@@ -146,7 +146,7 @@
     "content": "吴静文 的加班记录存在时长偏差（偏差100%），时间计算61分钟 vs 量级计算33578分钟。事项：12312",
     "type": "anomaly_alert",
     "relatedId": "moy852qrhszy5ckz",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:51.402Z"
   },
   {
@@ -156,7 +156,7 @@
     "content": "吴静文 提交了 2026-05-01 的加班申请（队列加班：12312），时长1小时，请审批。",
     "type": "record_submitted",
     "relatedId": "moy84zy0gfq2nuig",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:51.879Z"
   },
   {
@@ -166,7 +166,7 @@
     "content": "吴静文 提交了 2026-05-01 的加班申请（队列加班：12312），时长1小时，请审批。",
     "type": "record_submitted",
     "relatedId": "moy850j4q1ypwnpp",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:51.887Z"
   },
   {
@@ -176,7 +176,7 @@
     "content": "吴静文 提交了 2026-05-01 的加班申请（队列加班：12312），时长1小时，请审批。",
     "type": "record_submitted",
     "relatedId": "moy851xffvxr6rts",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:51.899Z"
   },
   {
@@ -186,7 +186,7 @@
     "content": "吴静文 的加班记录存在时长偏差（偏差100%），时间计算61分钟 vs 量级计算33578分钟。事项：12312",
     "type": "anomaly_alert",
     "relatedId": "moy852ygtp4tjoqo",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:51.958Z"
   },
   {
@@ -196,7 +196,7 @@
     "content": "吴静文 提交了 2026-05-01 的加班申请（队列加班：12312），时长1小时，请审批。",
     "type": "record_submitted",
     "relatedId": "moy850gmuf3n435o",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:51.966Z"
   },
   {
@@ -206,7 +206,7 @@
     "content": "吴静文 提交了 2026-05-01 的加班申请（队列加班：12312），时长1小时，请审批。",
     "type": "record_submitted",
     "relatedId": "moy852jvxdoo2chi",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:51.972Z"
   },
   {
@@ -216,7 +216,7 @@
     "content": "吴静文 提交了 2026-05-01 的加班申请（队列加班：12312），时长1小时，请审批。",
     "type": "record_submitted",
     "relatedId": "moy850umvawatdkx",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:52.006Z"
   },
   {
@@ -226,7 +226,7 @@
     "content": "吴静文 的加班记录存在时长偏差（偏差100%），时间计算61分钟 vs 量级计算33578分钟。事项：12312",
     "type": "anomaly_alert",
     "relatedId": "moy8536tz6sgghwq",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:52.019Z"
   },
   {
@@ -236,7 +236,7 @@
     "content": "吴静文 的加班记录存在时长偏差（偏差100%），时间计算61分钟 vs 量级计算33578分钟。事项：12312",
     "type": "anomaly_alert",
     "relatedId": "moy853t6xlnu12l8",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:52.151Z"
   },
   {
@@ -246,7 +246,7 @@
     "content": "吴静文 的加班记录存在时长偏差（偏差100%），时间计算61分钟 vs 量级计算33578分钟。事项：12312",
     "type": "anomaly_alert",
     "relatedId": "moy853efgte6my4v",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:52.264Z"
   },
   {
@@ -256,7 +256,7 @@
     "content": "吴静文 提交了 2026-05-01 的加班申请（队列加班：12312），时长1小时，请审批。",
     "type": "record_submitted",
     "relatedId": "moy851u9m9mhryd1",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:52.309Z"
   },
   {
@@ -266,7 +266,7 @@
     "content": "吴静文 提交了 2026-05-01 的加班申请（队列加班：12312），时长1小时，请审批。",
     "type": "record_submitted",
     "relatedId": "moy852ub959uutur",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:52.315Z"
   },
   {
@@ -276,7 +276,7 @@
     "content": "吴静文 提交了 2026-05-01 的加班申请（队列加班：12312），时长1小时，请审批。",
     "type": "record_submitted",
     "relatedId": "moy852gjaped4ame",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:52.325Z"
   },
   {
@@ -286,7 +286,7 @@
     "content": "吴静文 提交了 2026-05-01 的加班申请（队列加班：12312），时长1小时，请审批。",
     "type": "record_submitted",
     "relatedId": "moy852dlvuo54t5t",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:52.331Z"
   },
   {
@@ -296,7 +296,7 @@
     "content": "吴静文 提交了 2026-05-01 的加班申请（队列加班：12312），时长1小时，请审批。",
     "type": "record_submitted",
     "relatedId": "moy851ppixlvpcuu",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:52.335Z"
   },
   {
@@ -306,7 +306,7 @@
     "content": "吴静文 的加班记录存在时长偏差（偏差100%），时间计算61分钟 vs 量级计算33578分钟。事项：12312",
     "type": "anomaly_alert",
     "relatedId": "moy853ane518gzkq",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:52.372Z"
   },
   {
@@ -316,7 +316,7 @@
     "content": "吴静文 的加班记录存在时长偏差（偏差100%），时间计算61分钟 vs 量级计算33578分钟。事项：12312",
     "type": "anomaly_alert",
     "relatedId": "moy853pabhz0tqt3",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:52.447Z"
   },
   {
@@ -326,7 +326,7 @@
     "content": "吴静文 的加班记录存在时长偏差（偏差100%），时间计算61分钟 vs 量级计算33578分钟。事项：12312",
     "type": "anomaly_alert",
     "relatedId": "moy853hum5lmjgq2",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:52.536Z"
   },
   {
@@ -336,7 +336,7 @@
     "content": "吴静文 的加班记录存在时长偏差（偏差100%），时间计算61分钟 vs 量级计算33578分钟。事项：12312",
     "type": "anomaly_alert",
     "relatedId": "moy853ljlx2490ww",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:52.741Z"
   },
   {
@@ -346,7 +346,7 @@
     "content": "吴静文 提交了 2026-05-01 的加班申请（队列加班：12312），时长1小时，请审批。",
     "type": "record_submitted",
     "relatedId": "moy852qrhszy5ckz",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:52.754Z"
   },
   {
@@ -356,7 +356,7 @@
     "content": "吴静文 的加班记录存在时长偏差（偏差100%），时间计算61分钟 vs 量级计算33578分钟。事项：12312",
     "type": "anomaly_alert",
     "relatedId": "moy853x67rea88mo",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:52.785Z"
   },
   {
@@ -366,7 +366,7 @@
     "content": "吴静文 提交了 2026-05-01 的加班申请（队列加班：12312），时长1小时，请审批。",
     "type": "record_submitted",
     "relatedId": "moy852ygtp4tjoqo",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:53.097Z"
   },
   {
@@ -376,7 +376,7 @@
     "content": "吴静文 提交了 2026-05-01 的加班申请（队列加班：12312），时长1小时，请审批。",
     "type": "record_submitted",
     "relatedId": "moy853t6xlnu12l8",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:53.407Z"
   },
   {
@@ -386,7 +386,7 @@
     "content": "吴静文 提交了 2026-05-01 的加班申请（队列加班：12312），时长1小时，请审批。",
     "type": "record_submitted",
     "relatedId": "moy853efgte6my4v",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:53.432Z"
   },
   {
@@ -396,7 +396,7 @@
     "content": "吴静文 提交了 2026-05-01 的加班申请（队列加班：12312），时长1小时，请审批。",
     "type": "record_submitted",
     "relatedId": "moy853pabhz0tqt3",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:53.482Z"
   },
   {
@@ -406,7 +406,7 @@
     "content": "吴静文 提交了 2026-05-01 的加班申请（队列加班：12312），时长1小时，请审批。",
     "type": "record_submitted",
     "relatedId": "moy853ane518gzkq",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:53.502Z"
   },
   {
@@ -416,7 +416,7 @@
     "content": "吴静文 提交了 2026-05-01 的加班申请（队列加班：12312），时长1小时，请审批。",
     "type": "record_submitted",
     "relatedId": "moy852nhhscadl0z",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:53.549Z"
   },
   {
@@ -426,7 +426,7 @@
     "content": "吴静文 提交了 2026-05-01 的加班申请（队列加班：12312），时长1小时，请审批。",
     "type": "record_submitted",
     "relatedId": "moy8536tz6sgghwq",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:53.715Z"
   },
   {
@@ -436,7 +436,7 @@
     "content": "吴静文 提交了 2026-05-01 的加班申请（队列加班：12312），时长1小时，请审批。",
     "type": "record_submitted",
     "relatedId": "moy853hum5lmjgq2",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-09T10:51:53.791Z"
   },
   {
