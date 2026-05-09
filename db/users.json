@@ -24,5 +24,18 @@
     "createdAt": "2026-05-09T10:51:05.720Z",
     "lastLogin": "2026-05-09T10:51:05.720Z",
     "loginCount": 1
+  },
+  {
+    "id": "moy84bit1nkb8fdt",
+    "mis": "wb_cuiwenwu02",
+    "name": "崔文武",
+    "avatar": null,
+    "role": "member",
+    "groupId": null,
+    "status": "active",
+    "passwordHash": "1581471cb68b55fd9ab69e6935322051ed8c1abda87ea4399abda86d12214fc8",
+    "createdAt": "2026-05-09T10:51:14.645Z",
+    "lastLogin": "2026-05-09T10:51:14.648Z",
+    "loginCount": 1
   }
 ]
