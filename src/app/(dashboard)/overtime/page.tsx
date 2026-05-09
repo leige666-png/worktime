@@ -1,338 +1,269 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import {
-  Card,
-  Table,
-  Button,
-  Tag,
-  Space,
-  Typography,
-  DatePicker,
-  Select,
-  Modal,
-  Form,
-  Input,
-  InputNumber,
-  TimePicker,
-  message,
-  Tooltip,
-  Popconfirm,
-} from 'antd';
-import { PlusOutlined, ExportOutlined, WarningOutlined } from '@ant-design/icons';
+import { useState, useEffect } from 'react';
+import { Card, Table, Button, Modal, Form, Input, Select, DatePicker, TimePicker, InputNumber, message, Tag, Space, Typography, Popconfirm, Alert, Tabs } from 'antd';
+import { PlusOutlined, CheckOutlined, CloseOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { useAuthStore } from '@/lib/store/auth';
-import {
-  getOvertimeRecords,
-  getOvertimeTypes,
-  createOvertimeRecord,
-  revokeOvertimeRecord,
-  approveOvertimeRecord,
-  rejectOvertimeRecord,
-} from '@/lib/services/overtime';
-import type { OvertimeType } from '@/types/database';
+import { overtimeDB, overtimeTypeDB, userDB, groupDB, generateId, now, calcTimeDuration, calcWorkloadDuration, calcDeviation, configDB } from '@/lib/db';
+import type { OvertimeRecord, OvertimeType } from '@/types/database';
 import dayjs from 'dayjs';
 
-const { Title } = Typography;
-const { RangePicker } = DatePicker;
-
-const statusMap: Record<string, { color: string; text: string }> = {
-  pending: { color: 'orange', text: '待审批' },
-  approved: { color: 'green', text: '已通过' },
-  rejected: { color: 'red', text: '已驳回' },
-  revoked: { color: 'default', text: '已撤回' },
-};
+const { Text } = Typography;
 
 export default function OvertimePage() {
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [records, setRecords] = useState<any[]>([]);
+  const { user, isAdmin, canReview } = useAuthStore();
+  const [records, setRecords] = useState<OvertimeRecord[]>([]);
+  const [pendingRecords, setPendingRecords] = useState<OvertimeRecord[]>([]);
   const [types, setTypes] = useState<OvertimeType[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<string | undefined>();
-  const [typeFilter, setTypeFilter] = useState<string | undefined>();
-  const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
   const [form] = Form.useForm();
-  const { user, hasRole } = useAuthStore();
+  const [activeTab, setActiveTab] = useState('my');
 
-  const canApprove = hasRole('admin') || hasRole('team_lead') || hasRole('reviewer');
-
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params: any = {};
-      if (!canApprove) params.userId = user?.id;
-      if (statusFilter) params.status = statusFilter;
-      if (typeFilter) params.typeId = typeFilter;
-      if (dateRange) {
-        params.startDate = dateRange[0].format('YYYY-MM-DD');
-        params.endDate = dateRange[1].format('YYYY-MM-DD');
-      }
-
-      const [recordsData, typesData] = await Promise.all([
-        getOvertimeRecords(params),
-        getOvertimeTypes(),
-      ]);
-      setRecords(recordsData || []);
-      setTypes(typesData || []);
-    } catch (error: any) {
-      message.error('加载数据失败：' + error.message);
-    } finally {
-      setLoading(false);
+  const loadData = () => {
+    if (!user) return;
+    setRecords(overtimeDB.getByUser(user.id));
+    setTypes(overtimeTypeDB.getActive());
+    if (canReview()) {
+      setPendingRecords(overtimeDB.getPending());
     }
-  }, [statusFilter, typeFilter, dateRange, user?.id, canApprove]);
+  };
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  useEffect(() => { loadData(); }, [user]);
 
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields();
-      const date = values.date.format('YYYY-MM-DD');
-      const [startTime, endTime] = values.time_range;
+      if (!user) return;
 
-      await createOvertimeRecord({
-        user_id: user!.id,
-        type_id: values.type_id,
-        date,
-        start_time: `${date}T${startTime.format('HH:mm')}:00`,
-        end_time: `${date}T${endTime.format('HH:mm')}:00`,
-        workload_description: values.workload_description,
-        workload_amount: values.workload_amount,
-        efficiency_score: values.efficiency_score || 1.0,
-      });
+      const selectedType = types.find(t => t.id === values.typeId);
+      const startTime = values.startTime.format('HH:mm');
+      const endTime = values.endTime.format('HH:mm');
+      const timeDuration = calcTimeDuration(startTime, endTime);
+      const calculatedDuration = calcWorkloadDuration(values.workload, values.efficiency);
+      const threshold = configDB.get().anomalyThreshold;
+      const deviationPercent = calcDeviation(timeDuration, calculatedDuration);
+      const hasAnomaly = deviationPercent > threshold;
 
-      message.success('加班申报提交成功');
-      setIsModalOpen(false);
+      // 确定提交对象（管理员可代提交）
+      let targetUser = user;
+      if (values.userId && values.userId !== user.id && isAdmin()) {
+        const found = userDB.getById(values.userId);
+        if (found) targetUser = found;
+      }
+
+      const group = targetUser.groupId ? groupDB.getById(targetUser.groupId) : null;
+
+      const record: OvertimeRecord = {
+        id: generateId(),
+        userId: targetUser.id,
+        userName: targetUser.name,
+        userMis: targetUser.mis,
+        groupId: targetUser.groupId,
+        groupName: group?.name || null,
+        date: values.date.format('YYYY-MM-DD'),
+        startTime,
+        endTime,
+        timeDuration,
+        typeId: values.typeId,
+        typeName: selectedType?.name || '',
+        task: values.task,
+        efficiency: values.efficiency,
+        workload: values.workload,
+        calculatedDuration,
+        hasAnomaly,
+        anomalyReason: hasAnomaly ? `时间差${timeDuration}分钟与量级计算${calculatedDuration}分钟偏差${deviationPercent}%` : null,
+        deviationPercent,
+        proof: values.proof || null,
+        status: 'pending',
+        submittedBy: user.id,
+        submittedByName: user.name,
+        reviewerId: null,
+        reviewerName: null,
+        reviewedAt: null,
+        reviewComment: null,
+        createdAt: now(),
+        updatedAt: now(),
+      };
+
+      overtimeDB.add(record);
+
+      if (hasAnomaly) {
+        message.warning(`提交成功，但检测到时长异常（偏差${deviationPercent}%），已通知管理员核实`);
+      } else {
+        message.success('加班申请已提交，等待审批');
+      }
+
+      setModalOpen(false);
       form.resetFields();
       loadData();
-    } catch (error: any) {
-      if (error.errorFields) return; // form validation
-      message.error('提交失败：' + error.message);
+    } catch (error) {
+      // form validation error
     }
   };
 
-  const handleRevoke = async (id: string) => {
-    try {
-      await revokeOvertimeRecord(id);
-      message.success('已撤回');
-      loadData();
-    } catch (error: any) {
-      message.error('撤回失败：' + error.message);
-    }
+  const handleApprove = (id: string) => {
+    if (!user) return;
+    overtimeDB.approve(id, user.id, user.name);
+    message.success('已通过');
+    loadData();
   };
 
-  const handleApprove = async (id: string) => {
-    try {
-      await approveOvertimeRecord(id, user!.id);
-      message.success('已通过');
-      loadData();
-    } catch (error: any) {
-      message.error('操作失败：' + error.message);
-    }
-  };
-
-  const handleReject = async (id: string) => {
+  const handleReject = (id: string) => {
+    if (!user) return;
     Modal.confirm({
       title: '驳回原因',
       content: (
-        <Input.TextArea id="reject-reason" rows={3} placeholder="请输入驳回原因" />
+        <Input.TextArea id="reject-reason" placeholder="请输入驳回原因" rows={3} />
       ),
-      onOk: async () => {
-        const reason = (document.getElementById('reject-reason') as HTMLTextAreaElement)?.value;
-        if (!reason) {
-          message.warning('请输入驳回原因');
-          return Promise.reject();
-        }
-        await rejectOvertimeRecord(id, user!.id, reason);
+      onOk: () => {
+        const reason = (document.getElementById('reject-reason') as HTMLTextAreaElement)?.value || '审批未通过';
+        overtimeDB.reject(id, user.id, user.name, reason);
         message.success('已驳回');
         loadData();
       },
     });
   };
 
+  const statusColors: Record<string, string> = { pending: 'processing', approved: 'success', rejected: 'error' };
+  const statusLabels: Record<string, string> = { pending: '待审批', approved: '已通过', rejected: '已驳回' };
+
   const columns = [
+    { title: '日期', dataIndex: 'date', key: 'date', width: 110 },
+    { title: '姓名', dataIndex: 'userName', key: 'userName', width: 80 },
+    { title: '团队', dataIndex: 'groupName', key: 'groupName', width: 80, render: (v: string) => v || '-' },
+    { title: '类型', dataIndex: 'typeName', key: 'typeName', width: 90, render: (v: string) => <Tag>{v}</Tag> },
+    { title: '事项', dataIndex: 'task', key: 'task', ellipsis: true },
+    { title: '时间段', key: 'time', width: 120, render: (_: any, r: OvertimeRecord) => `${r.startTime}-${r.endTime}` },
+    { title: '时长(h)', key: 'duration', width: 80, render: (_: any, r: OvertimeRecord) => (r.timeDuration / 60).toFixed(1) },
+    { title: '量级', dataIndex: 'workload', key: 'workload', width: 60 },
+    { title: '人效', dataIndex: 'efficiency', key: 'efficiency', width: 60 },
     {
-      title: '申报人',
-      key: 'user',
-      render: (_: unknown, record: any) => record.users?.name || '-',
-      hidden: !canApprove,
+      title: '异常', key: 'anomaly', width: 60,
+      render: (_: any, r: OvertimeRecord) => r.hasAnomaly
+        ? <ExclamationCircleOutlined style={{ color: '#ff4d4f', fontSize: 16 }} title={r.anomalyReason || ''} />
+        : <CheckOutlined style={{ color: '#52c41a' }} />,
     },
     {
-      title: '日期',
-      dataIndex: 'date',
-      key: 'date',
+      title: '状态', dataIndex: 'status', key: 'status', width: 80,
+      render: (status: string) => <Tag color={statusColors[status]}>{statusLabels[status]}</Tag>,
     },
+  ];
+
+  const approvalColumns = [
+    ...columns,
     {
-      title: '时间段',
-      key: 'time_range',
-      render: (_: unknown, record: any) =>
-        `${dayjs(record.start_time).format('HH:mm')} - ${dayjs(record.end_time).format('HH:mm')}`,
-    },
-    {
-      title: '时长',
-      dataIndex: 'duration_minutes',
-      key: 'duration_minutes',
-      render: (min: number) => `${Math.floor(min / 60)}h${min % 60}m`,
-    },
-    {
-      title: '类型',
-      key: 'type',
-      render: (_: unknown, record: any) => (
-        <Tag color={record.overtime_types?.color}>
-          {record.overtime_types?.name || '-'}
-        </Tag>
-      ),
-    },
-    {
-      title: '工作内容',
-      dataIndex: 'workload_description',
-      key: 'workload_description',
-      ellipsis: true,
-      width: 200,
-    },
-    {
-      title: '异常',
-      key: 'anomaly',
-      render: (_: unknown, record: any) =>
-        record.anomaly_flag ? (
-          <Tooltip title={record.anomaly_reason}>
-            <Tag color="red" icon={<WarningOutlined />}>
-              异常
-            </Tag>
-          </Tooltip>
-        ) : (
-          <Tag color="green">正常</Tag>
-        ),
-    },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      key: 'status',
-      render: (status: string) => {
-        const s = statusMap[status] || { color: 'default', text: status };
-        return <Tag color={s.color}>{s.text}</Tag>;
-      },
-    },
-    {
-      title: '操作',
-      key: 'action',
-      render: (_: unknown, record: any) => (
-        <Space>
-          {record.status === 'pending' && record.user_id === user?.id && (
-            <Popconfirm title="确定撤回？" onConfirm={() => handleRevoke(record.id)}>
-              <a style={{ color: '#ff4d4f' }}>撤回</a>
-            </Popconfirm>
-          )}
-          {record.status === 'pending' && canApprove && record.user_id !== user?.id && (
-            <>
-              <a style={{ color: '#52c41a' }} onClick={() => handleApprove(record.id)}>
-                通过
-              </a>
-              <a style={{ color: '#ff4d4f' }} onClick={() => handleReject(record.id)}>
-                驳回
-              </a>
-            </>
-          )}
+      title: '操作', key: 'action', width: 140, fixed: 'right' as const,
+      render: (_: any, r: OvertimeRecord) => r.status === 'pending' ? (
+        <Space size={4}>
+          <Button type="link" size="small" onClick={() => handleApprove(r.id)}>通过</Button>
+          <Button type="link" size="small" danger onClick={() => handleReject(r.id)}>驳回</Button>
         </Space>
-      ),
+      ) : null,
     },
-  ].filter((col) => !col.hidden);
+  ];
+
+  const allUsers = isAdmin() ? userDB.getActive() : [];
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-        <Title level={4} style={{ margin: 0 }}>
-          加班申报
-        </Title>
-        <Space>
-          <Button icon={<ExportOutlined />}>导出</Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setIsModalOpen(true)}>
-            新增申报
+      <Tabs
+        activeKey={activeTab}
+        onChange={setActiveTab}
+        tabBarExtraContent={
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
+            填报加班
           </Button>
-        </Space>
-      </div>
-
-      <Card style={{ marginBottom: 16 }}>
-        <Space wrap>
-          <RangePicker
-            value={dateRange}
-            onChange={(dates) => setDateRange(dates as [dayjs.Dayjs, dayjs.Dayjs] | null)}
-          />
-          <Select
-            placeholder="状态筛选"
-            style={{ width: 120 }}
-            allowClear
-            value={statusFilter}
-            onChange={setStatusFilter}
-            options={[
-              { value: 'pending', label: '待审批' },
-              { value: 'approved', label: '已通过' },
-              { value: 'rejected', label: '已驳回' },
-              { value: 'revoked', label: '已撤回' },
-            ]}
-          />
-          <Select
-            placeholder="加班类型"
-            style={{ width: 140 }}
-            allowClear
-            value={typeFilter}
-            onChange={setTypeFilter}
-            options={types.map((t) => ({ value: t.id, label: t.name }))}
-          />
-          <Button onClick={loadData}>查询</Button>
-        </Space>
-      </Card>
-
-      <Table
-        columns={columns}
-        dataSource={records}
-        rowKey="id"
-        loading={loading}
-        pagination={{ pageSize: 15, showTotal: (t) => `共 ${t} 条` }}
+        }
+        items={[
+          {
+            key: 'my',
+            label: '我的加班',
+            children: (
+              <Table
+                dataSource={records}
+                columns={columns}
+                rowKey="id"
+                size="small"
+                scroll={{ x: 1000 }}
+                pagination={{ pageSize: 15 }}
+              />
+            ),
+          },
+          ...(canReview() ? [{
+            key: 'pending',
+            label: `待审批 (${pendingRecords.length})`,
+            children: (
+              <Table
+                dataSource={pendingRecords}
+                columns={approvalColumns}
+                rowKey="id"
+                size="small"
+                scroll={{ x: 1200 }}
+                pagination={{ pageSize: 15 }}
+              />
+            ),
+          }] : []),
+        ]}
       />
 
+      {/* 填报弹窗 */}
       <Modal
-        title="新增加班申报"
-        open={isModalOpen}
+        title="填报加班"
+        open={modalOpen}
         onOk={handleSubmit}
-        onCancel={() => setIsModalOpen(false)}
+        onCancel={() => { setModalOpen(false); form.resetFields(); }}
         width={600}
         okText="提交"
       >
-        <Form form={form} layout="vertical">
+        <Form form={form} layout="vertical" initialValues={{ efficiency: 30, workload: 0 }}>
+          {isAdmin() && (
+            <Form.Item name="userId" label="提交对象（管理员可代提交）">
+              <Select placeholder="默认为自己" allowClear>
+                {allUsers.map(u => (
+                  <Select.Option key={u.id} value={u.id}>{u.name}（{u.mis}）</Select.Option>
+                ))}
+              </Select>
+            </Form.Item>
+          )}
           <Form.Item name="date" label="加班日期" rules={[{ required: true, message: '请选择日期' }]}>
             <DatePicker style={{ width: '100%' }} />
           </Form.Item>
-          <Form.Item name="time_range" label="加班时段" rules={[{ required: true, message: '请选择时段' }]}>
-            <TimePicker.RangePicker format="HH:mm" style={{ width: '100%' }} />
+          <Space style={{ width: '100%' }} size={12}>
+            <Form.Item name="startTime" label="开始时间" rules={[{ required: true, message: '请选择' }]} style={{ flex: 1 }}>
+              <TimePicker format="HH:mm" style={{ width: '100%' }} />
+            </Form.Item>
+            <Form.Item name="endTime" label="结束时间" rules={[{ required: true, message: '请选择' }]} style={{ flex: 1 }}>
+              <TimePicker format="HH:mm" style={{ width: '100%' }} />
+            </Form.Item>
+          </Space>
+          <Form.Item name="typeId" label="加班类型" rules={[{ required: true, message: '请选择类型' }]}>
+            <Select placeholder="请选择加班类型">
+              {types.map(t => (
+                <Select.Option key={t.id} value={t.id}>{t.name}</Select.Option>
+              ))}
+            </Select>
           </Form.Item>
-          <Form.Item name="type_id" label="加班类型" rules={[{ required: true, message: '请选择类型' }]}>
-            <Select
-              placeholder="选择加班类型"
-              options={types.map((t) => ({
-                value: t.id,
-                label: `${t.name} (${t.multiplier}x)`,
-              }))}
-            />
+          <Form.Item name="task" label="加班事项" rules={[{ required: true, message: '请填写加班事项' }]}>
+            <Input.TextArea placeholder="具体的加班内容名称" rows={2} />
           </Form.Item>
-          <Form.Item name="workload_description" label="工作内容" rules={[{ required: true, message: '请描述工作内容' }]}>
-            <Input.TextArea rows={3} placeholder="描述加班期间完成的工作内容" />
+          <Space style={{ width: '100%' }} size={12}>
+            <Form.Item name="efficiency" label="人效（件/小时）" rules={[{ required: true }]} style={{ flex: 1 }}>
+              <InputNumber min={0.1} step={1} style={{ width: '100%' }} placeholder="该类型的人效" />
+            </Form.Item>
+            <Form.Item name="workload" label="加班量级（件）" rules={[{ required: true }]} style={{ flex: 1 }}>
+              <InputNumber min={0} step={1} style={{ width: '100%' }} placeholder="完成了多少量级" />
+            </Form.Item>
+          </Space>
+          <Form.Item name="proof" label="证明（ID或截图描述）">
+            <Input.TextArea placeholder="请描述加班证据，如任务ID、截图说明等" rows={2} />
           </Form.Item>
-          <Form.Item
-            name="workload_amount"
-            label="工作量（可选，用于双维度异常检测）"
-            tooltip="填写后系统将自动对比时长与工作量的合理性"
-          >
-            <InputNumber min={0} step={0.5} style={{ width: '100%' }} placeholder="如：3（表示完成了3个需求/任务）" />
-          </Form.Item>
-          <Form.Item
-            name="efficiency_score"
-            label="效率系数"
-            initialValue={1.0}
-            tooltip="1.0为正常效率，>1表示高效，<1表示低效"
-          >
-            <InputNumber min={0.1} max={2.0} step={0.1} style={{ width: '100%' }} />
-          </Form.Item>
+          <Alert
+            message="时长计算说明"
+            description="系统会同时计算两个维度：① 时间差（结束-开始）② 量级÷人效。若两者偏差超过阈值，将触发异常警报由管理员核实。"
+            type="info"
+            showIcon
+            style={{ marginTop: 8 }}
+          />
         </Form>
       </Modal>
     </div>

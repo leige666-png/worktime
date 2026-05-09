@@ -1,396 +1,453 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import {
-  Card,
-  Table,
-  Button,
-  Tag,
-  Space,
-  Typography,
-  Avatar,
-  Input,
-  Tabs,
-  Modal,
-  Form,
-  Select,
-  message,
-  Popconfirm,
-  ColorPicker,
-} from 'antd';
-import {
-  PlusOutlined,
-  SearchOutlined,
-  TeamOutlined,
-  UserOutlined,
-  EditOutlined,
-  DeleteOutlined,
-} from '@ant-design/icons';
-import type { User, Role, Group } from '@/types/database';
+import { useState, useEffect } from 'react';
+import { Card, Tabs, Table, Tag, Button, Space, Modal, Form, Input, Select, message, Popconfirm, Badge, Tooltip, Row, Col, ColorPicker, Empty } from 'antd';
+import { UserAddOutlined, TeamOutlined, SafetyOutlined, PlusOutlined, EditOutlined, DeleteOutlined, CheckOutlined, CloseOutlined, SendOutlined } from '@ant-design/icons';
 import { useAuthStore } from '@/lib/store/auth';
-import {
-  getUsers,
-  getRoles,
-  getGroups,
-  createGroup,
-  updateGroup,
-  deleteGroup,
-  assignRole,
-  removeRole,
-  updateUserStatus,
-  addUserToGroup,
-  removeUserFromGroup,
-} from '@/lib/services/personnel';
-
-const { Title } = Typography;
-
-const statusMap: Record<string, { color: string; text: string }> = {
-  active: { color: 'green', text: '在职' },
-  inactive: { color: 'default', text: '离职' },
-  frozen: { color: 'blue', text: '冻结' },
-};
+import { userDB, groupDB, permissionRequestDB, taskDB, generateId, now } from '@/lib/db';
+import { ROLE_LABELS } from '@/types/database';
+import type { User, Group, PermissionRequest, UserRole } from '@/types/database';
+import dayjs from 'dayjs';
 
 export default function PersonnelPage() {
-  const [searchText, setSearchText] = useState('');
-  const [users, setUsers] = useState<any[]>([]);
-  const [roles, setRoles] = useState<Role[]>([]);
-  const [groups, setGroups] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [roleModalOpen, setRoleModalOpen] = useState(false);
-  const [groupModalOpen, setGroupModalOpen] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const { user, hasRole } = useAuthStore();
+  const [users, setUsers] = useState<User[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [requests, setRequests] = useState<PermissionRequest[]>([]);
+  const [activeTab, setActiveTab] = useState('users');
+
+  // 弹窗状态
+  const [groupModal, setGroupModal] = useState(false);
   const [editingGroup, setEditingGroup] = useState<Group | null>(null);
-  const [roleForm] = Form.useForm();
+  const [roleModal, setRoleModal] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [taskModal, setTaskModal] = useState(false);
+  const [taskTargetUser, setTaskTargetUser] = useState<User | null>(null);
+  const [reviewModal, setReviewModal] = useState(false);
+  const [reviewingRequest, setReviewingRequest] = useState<PermissionRequest | null>(null);
+
   const [groupForm] = Form.useForm();
-  const { user: currentUser } = useAuthStore();
+  const [roleForm] = Form.useForm();
+  const [taskForm] = Form.useForm();
+  const [reviewForm] = Form.useForm();
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [usersData, rolesData, groupsData] = await Promise.all([
-        getUsers({ search: searchText }),
-        getRoles(),
-        getGroups(),
-      ]);
-      setUsers(usersData || []);
-      setRoles(rolesData || []);
-      setGroups(groupsData || []);
-    } catch (error: any) {
-      message.error('加载数据失败：' + error.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [searchText]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-  // 角色管理
-  const handleRoleEdit = (user: any) => {
-    setSelectedUser(user);
-    const currentRoleIds = user.user_roles?.map((ur: any) => ur.role_id) || [];
-    roleForm.setFieldsValue({ roles: currentRoleIds });
-    setRoleModalOpen(true);
+  const loadData = () => {
+    setUsers(userDB.getAll());
+    setGroups(groupDB.getAll());
+    setRequests(permissionRequestDB.getAll());
   };
 
-  const handleRoleSave = async () => {
+  useEffect(() => { loadData(); }, []);
+
+  const canManage = hasRole('team_lead');
+  const isAdmin = hasRole('admin');
+
+  // ========== 用户管理 ==========
+
+  const handleChangeRole = (targetUser: User) => {
+    setEditingUser(targetUser);
+    roleForm.setFieldsValue({ role: targetUser.role, groupId: targetUser.groupId });
+    setRoleModal(true);
+  };
+
+  const handleSaveRole = async () => {
     try {
       const values = await roleForm.validateFields();
-      const currentRoleIds = selectedUser.user_roles?.map((ur: any) => ur.role_id) || [];
-      const newRoleIds: string[] = values.roles;
-
-      // 移除取消的角色
-      for (const roleId of currentRoleIds) {
-        if (!newRoleIds.includes(roleId)) {
-          await removeRole(selectedUser.id, roleId);
-        }
+      if (!editingUser || !user) return;
+      userDB.update(editingUser.id, { role: values.role, groupId: values.groupId || null });
+      if (values.groupId) groupDB.refreshMemberCount(values.groupId);
+      if (editingUser.groupId && editingUser.groupId !== values.groupId) {
+        groupDB.refreshMemberCount(editingUser.groupId);
       }
-      // 添加新角色
-      for (const roleId of newRoleIds) {
-        if (!currentRoleIds.includes(roleId)) {
-          await assignRole(selectedUser.id, roleId, currentUser?.id);
-        }
-      }
-
-      message.success('角色更新成功');
-      setRoleModalOpen(false);
+      message.success('用户信息已更新');
+      setRoleModal(false);
       loadData();
-    } catch (error: any) {
-      message.error('操作失败：' + error.message);
-    }
+    } catch { /* validation */ }
   };
 
-  // 分组管理
-  const handleGroupSave = async () => {
+  const handleDeleteUser = (targetUser: User) => {
+    userDB.delete(targetUser.id);
+    if (targetUser.groupId) groupDB.refreshMemberCount(targetUser.groupId);
+    message.success('用户已删除');
+    loadData();
+  };
+
+  const handleAssignTask = (targetUser: User) => {
+    setTaskTargetUser(targetUser);
+    taskForm.resetFields();
+    setTaskModal(true);
+  };
+
+  const handleSaveTask = async () => {
+    try {
+      const values = await taskForm.validateFields();
+      if (!taskTargetUser || !user) return;
+      taskDB.add({
+        id: generateId(),
+        userId: taskTargetUser.id,
+        userName: taskTargetUser.name,
+        title: values.title,
+        description: values.description || null,
+        assignedBy: user.id,
+        assignedByName: user.name,
+        status: 'pending',
+        dueDate: values.dueDate || null,
+        createdAt: now(),
+        updatedAt: now(),
+      });
+      message.success(`已向 ${taskTargetUser.name} 分配任务`);
+      setTaskModal(false);
+    } catch { /* validation */ }
+  };
+
+  // ========== 分组管理 ==========
+
+  const handleAddGroup = () => {
+    setEditingGroup(null);
+    groupForm.resetFields();
+    setGroupModal(true);
+  };
+
+  const handleEditGroup = (group: Group) => {
+    setEditingGroup(group);
+    groupForm.setFieldsValue({ name: group.name, description: group.description, color: group.color, leaderId: group.leaderId });
+    setGroupModal(true);
+  };
+
+  const handleSaveGroup = async () => {
     try {
       const values = await groupForm.validateFields();
       const color = typeof values.color === 'string' ? values.color : values.color?.toHexString?.() || '#1890ff';
+      const leader = values.leaderId ? userDB.getById(values.leaderId) : null;
 
       if (editingGroup) {
-        await updateGroup(editingGroup.id, { ...values, color });
-        message.success('分组更新成功');
+        groupDB.update(editingGroup.id, {
+          name: values.name,
+          description: values.description || null,
+          color,
+          leaderId: values.leaderId || null,
+          leaderName: leader?.name || null,
+          updatedAt: now(),
+        });
+        message.success('分组已更新');
       } else {
-        await createGroup({ ...values, color, created_by: currentUser?.id });
-        message.success('分组创建成功');
+        groupDB.add({
+          id: generateId(),
+          name: values.name,
+          description: values.description || null,
+          color,
+          leaderId: values.leaderId || null,
+          leaderName: leader?.name || null,
+          memberCount: 0,
+          createdAt: now(),
+          updatedAt: now(),
+        });
+        message.success('分组已创建');
       }
-      setGroupModalOpen(false);
-      groupForm.resetFields();
-      setEditingGroup(null);
+      setGroupModal(false);
       loadData();
-    } catch (error: any) {
-      message.error('操作失败：' + error.message);
-    }
+    } catch { /* validation */ }
   };
 
-  const handleGroupDelete = async (id: string) => {
-    try {
-      await deleteGroup(id);
-      message.success('分组已删除');
-      loadData();
-    } catch (error: any) {
-      message.error('删除失败：' + error.message);
-    }
+  const handleDeleteGroup = (group: Group) => {
+    groupDB.delete(group.id);
+    message.success('分组已删除');
+    loadData();
   };
 
-  const handleStatusChange = async (userId: string, status: 'active' | 'inactive' | 'frozen') => {
-    try {
-      await updateUserStatus(userId, status);
-      message.success('状态更新成功');
-      loadData();
-    } catch (error: any) {
-      message.error('操作失败：' + error.message);
-    }
+  // ========== 权限审批 ==========
+
+  const handleReview = (request: PermissionRequest) => {
+    setReviewingRequest(request);
+    reviewForm.resetFields();
+    setReviewModal(true);
   };
+
+  const handleApproveRequest = async () => {
+    try {
+      if (!reviewingRequest || !user) return;
+      const values = await reviewForm.validateFields();
+      permissionRequestDB.approve(reviewingRequest.id, user.id, user.name, values.comment);
+      message.success('已批准权限申请');
+      setReviewModal(false);
+      loadData();
+    } catch { /* validation */ }
+  };
+
+  const handleRejectRequest = () => {
+    if (!reviewingRequest || !user) return;
+    const comment = reviewForm.getFieldValue('comment');
+    permissionRequestDB.reject(reviewingRequest.id, user.id, user.name, comment || '管理员拒绝');
+    message.success('已拒绝权限申请');
+    setReviewModal(false);
+    loadData();
+  };
+
+  // ========== 表格列定义 ==========
 
   const userColumns = [
+    { title: '姓名', dataIndex: 'name', key: 'name', width: 100 },
+    { title: 'MIS', dataIndex: 'mis', key: 'mis', width: 120 },
     {
-      title: '姓名',
-      key: 'name',
-      render: (_: unknown, record: any) => (
-        <Space>
-          <Avatar size="small" src={record.avatar} icon={<UserOutlined />} />
-          {record.name}
-        </Space>
+      title: '角色', dataIndex: 'role', key: 'role', width: 100,
+      render: (role: UserRole) => (
+        <Tag color={role === 'admin' ? 'red' : role === 'team_lead' ? 'orange' : role === 'reviewer' ? 'blue' : 'default'}>
+          {ROLE_LABELS[role]}
+        </Tag>
       ),
     },
     {
-      title: 'MIS',
-      dataIndex: 'mis',
-      key: 'mis',
-    },
-    {
-      title: '部门',
-      dataIndex: 'department',
-      key: 'department',
-      render: (dept: string | null) => dept || '-',
-    },
-    {
-      title: '角色',
-      key: 'roles',
-      render: (_: unknown, record: any) => (
-        <Space wrap>
-          {record.user_roles?.map((ur: any) => (
-            <Tag key={ur.role_id} color="blue">
-              {ur.roles?.display_name || '未知'}
-            </Tag>
-          ))}
-        </Space>
-      ),
-    },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      key: 'status',
-      render: (status: string) => {
-        const s = statusMap[status] || { color: 'default', text: status };
-        return <Tag color={s.color}>{s.text}</Tag>;
+      title: '分组', key: 'group', width: 120,
+      render: (_: unknown, record: User) => {
+        const group = groups.find(g => g.id === record.groupId);
+        return group ? <Tag color={group.color}>{group.name}</Tag> : <span style={{ color: '#999' }}>未分组</span>;
       },
     },
     {
-      title: '操作',
-      key: 'action',
-      render: (_: unknown, record: any) => (
-        <Space>
-          <a onClick={() => handleRoleEdit(record)}>角色</a>
-          <Select
-            size="small"
-            value={record.status}
-            style={{ width: 80 }}
-            onChange={(val) => handleStatusChange(record.id, val)}
-            options={[
-              { value: 'active', label: '在职' },
-              { value: 'frozen', label: '冻结' },
-              { value: 'inactive', label: '离职' },
-            ]}
-          />
-        </Space>
+      title: '状态', dataIndex: 'status', key: 'status', width: 80,
+      render: (status: string) => (
+        <Tag color={status === 'active' ? 'success' : 'warning'}>
+          {status === 'active' ? '正常' : '待审批'}
+        </Tag>
       ),
+    },
+    {
+      title: '最后登录', dataIndex: 'lastLogin', key: 'lastLogin', width: 140,
+      render: (v: string | null) => v ? dayjs(v).format('MM-DD HH:mm') : '-',
+    },
+    {
+      title: '操作', key: 'actions', width: 200,
+      render: (_: unknown, record: User) => {
+        if (!canManage || record.id === user?.id) return null;
+        return (
+          <Space size="small">
+            {isAdmin && (
+              <Tooltip title="修改角色/分组">
+                <Button size="small" icon={<EditOutlined />} onClick={() => handleChangeRole(record)} />
+              </Tooltip>
+            )}
+            <Tooltip title="分配任务">
+              <Button size="small" icon={<SendOutlined />} onClick={() => handleAssignTask(record)} />
+            </Tooltip>
+            {isAdmin && (
+              <Popconfirm title="确定删除该用户？" onConfirm={() => handleDeleteUser(record)}>
+                <Button size="small" danger icon={<DeleteOutlined />} />
+              </Popconfirm>
+            )}
+          </Space>
+        );
+      },
     },
   ];
 
   const groupColumns = [
     {
-      title: '分组名称',
-      key: 'name',
-      render: (_: unknown, record: any) => (
+      title: '分组名称', key: 'name', width: 150,
+      render: (_: unknown, record: Group) => (
         <Space>
           <div style={{ width: 12, height: 12, borderRadius: 2, background: record.color }} />
-          {record.name}
+          <span>{record.name}</span>
         </Space>
       ),
     },
+    { title: '描述', dataIndex: 'description', key: 'description', ellipsis: true },
+    { title: '组长', dataIndex: 'leaderName', key: 'leaderName', width: 100, render: (v: string | null) => v || '-' },
+    { title: '成员数', dataIndex: 'memberCount', key: 'memberCount', width: 80 },
     {
-      title: '描述',
-      dataIndex: 'description',
-      key: 'description',
-      render: (desc: string | null) => desc || '-',
+      title: '创建时间', dataIndex: 'createdAt', key: 'createdAt', width: 120,
+      render: (v: string) => dayjs(v).format('YYYY-MM-DD'),
     },
     {
-      title: '成员数',
-      key: 'member_count',
-      render: (_: unknown, record: any) => record.user_groups?.length || 0,
-    },
-    {
-      title: '操作',
-      key: 'action',
-      render: (_: unknown, record: any) => (
-        <Space>
-          <a
-            onClick={() => {
-              setEditingGroup(record);
-              groupForm.setFieldsValue(record);
-              setGroupModalOpen(true);
-            }}
-          >
-            <EditOutlined /> 编辑
-          </a>
-          <Popconfirm title="确定删除该分组？" onConfirm={() => handleGroupDelete(record.id)}>
-            <a style={{ color: '#ff4d4f' }}>
-              <DeleteOutlined /> 删除
-            </a>
+      title: '操作', key: 'actions', width: 120,
+      render: (_: unknown, record: Group) => canManage ? (
+        <Space size="small">
+          <Button size="small" icon={<EditOutlined />} onClick={() => handleEditGroup(record)} />
+          <Popconfirm title="删除分组后，组内成员将变为未分组" onConfirm={() => handleDeleteGroup(record)}>
+            <Button size="small" danger icon={<DeleteOutlined />} />
           </Popconfirm>
         </Space>
-      ),
+      ) : null,
     },
   ];
 
+  const requestColumns = [
+    { title: '申请人', dataIndex: 'userName', key: 'userName', width: 100 },
+    { title: 'MIS', dataIndex: 'userMis', key: 'userMis', width: 120 },
+    {
+      title: '申请角色', dataIndex: 'requestedRole', key: 'requestedRole', width: 100,
+      render: (role: UserRole) => <Tag color="blue">{ROLE_LABELS[role]}</Tag>,
+    },
+    { title: '理由', dataIndex: 'reason', key: 'reason', ellipsis: true },
+    {
+      title: '状态', dataIndex: 'status', key: 'status', width: 80,
+      render: (status: string) => (
+        <Tag color={status === 'approved' ? 'success' : status === 'rejected' ? 'error' : 'processing'}>
+          {status === 'approved' ? '已通过' : status === 'rejected' ? '已拒绝' : '待审批'}
+        </Tag>
+      ),
+    },
+    {
+      title: '申请时间', dataIndex: 'createdAt', key: 'createdAt', width: 120,
+      render: (v: string) => dayjs(v).format('MM-DD HH:mm'),
+    },
+    {
+      title: '操作', key: 'actions', width: 100,
+      render: (_: unknown, record: PermissionRequest) => {
+        if (record.status !== 'pending' || !isAdmin) return null;
+        return (
+          <Space size="small">
+            <Tooltip title="审批">
+              <Button size="small" type="primary" icon={<CheckOutlined />} onClick={() => handleReview(record)} />
+            </Tooltip>
+          </Space>
+        );
+      },
+    },
+  ];
+
+  const pendingCount = requests.filter(r => r.status === 'pending').length;
+
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-        <Title level={4} style={{ margin: 0 }}>
-          人员管理
-        </Title>
-      </div>
-
       <Tabs
-        defaultActiveKey="members"
+        activeKey={activeTab}
+        onChange={setActiveTab}
         items={[
           {
-            key: 'members',
-            label: (
-              <span>
-                <UserOutlined /> 成员列表 ({users.length})
-              </span>
-            ),
+            key: 'users',
+            label: <Space><UserAddOutlined />人员列表 ({users.length})</Space>,
             children: (
-              <>
-                <Card style={{ marginBottom: 16 }}>
-                  <Input
-                    placeholder="搜索姓名或 MIS"
-                    prefix={<SearchOutlined />}
-                    value={searchText}
-                    onChange={(e) => setSearchText(e.target.value)}
-                    onPressEnter={loadData}
-                    style={{ width: 300 }}
-                    allowClear
-                  />
-                </Card>
+              <Card size="small">
                 <Table
                   columns={userColumns}
                   dataSource={users}
                   rowKey="id"
-                  loading={loading}
-                  pagination={{ pageSize: 15, showTotal: (t) => `共 ${t} 人` }}
+                  size="small"
+                  pagination={{ pageSize: 15 }}
+                  scroll={{ x: 800 }}
                 />
-              </>
+              </Card>
             ),
           },
           {
             key: 'groups',
-            label: (
-              <span>
-                <TeamOutlined /> 分组管理 ({groups.length})
-              </span>
-            ),
+            label: <Space><TeamOutlined />分组管理 ({groups.length})</Space>,
             children: (
-              <>
-                <div style={{ marginBottom: 16 }}>
-                  <Button
-                    type="primary"
-                    icon={<PlusOutlined />}
-                    onClick={() => {
-                      setEditingGroup(null);
-                      groupForm.resetFields();
-                      setGroupModalOpen(true);
-                    }}
-                  >
-                    新建分组
-                  </Button>
-                </div>
+              <Card
+                size="small"
+                extra={canManage && <Button type="primary" size="small" icon={<PlusOutlined />} onClick={handleAddGroup}>新建分组</Button>}
+              >
                 <Table
                   columns={groupColumns}
                   dataSource={groups}
                   rowKey="id"
-                  loading={loading}
+                  size="small"
+                  pagination={false}
+                  locale={{ emptyText: <Empty description="暂无分组，点击右上角创建" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
                 />
-              </>
+              </Card>
+            ),
+          },
+          {
+            key: 'requests',
+            label: <Badge count={pendingCount} size="small" offset={[8, -2]}><Space><SafetyOutlined />权限审批</Space></Badge>,
+            children: (
+              <Card size="small">
+                <Table
+                  columns={requestColumns}
+                  dataSource={requests.sort((a, b) => {
+                    if (a.status === 'pending' && b.status !== 'pending') return -1;
+                    if (a.status !== 'pending' && b.status === 'pending') return 1;
+                    return b.createdAt.localeCompare(a.createdAt);
+                  })}
+                  rowKey="id"
+                  size="small"
+                  pagination={{ pageSize: 10 }}
+                  locale={{ emptyText: <Empty description="暂无权限申请" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
+                />
+              </Card>
             ),
           },
         ]}
       />
 
-      {/* 角色编辑弹窗 */}
-      <Modal
-        title={`编辑角色 - ${selectedUser?.name}`}
-        open={roleModalOpen}
-        onOk={handleRoleSave}
-        onCancel={() => setRoleModalOpen(false)}
-      >
+      {/* 修改角色/分组弹窗 */}
+      <Modal title={`编辑用户：${editingUser?.name}`} open={roleModal} onOk={handleSaveRole} onCancel={() => setRoleModal(false)} okText="保存">
         <Form form={roleForm} layout="vertical">
-          <Form.Item name="roles" label="分配角色" rules={[{ required: true, message: '请至少选择一个角色' }]}>
-            <Select
-              mode="multiple"
-              placeholder="选择角色"
-              options={roles.map((r) => ({
-                value: r.id,
-                label: `${r.display_name} (${r.name})`,
-              }))}
-            />
+          <Form.Item name="role" label="角色" rules={[{ required: true }]}>
+            <Select>
+              <Select.Option value="admin">管理员</Select.Option>
+              <Select.Option value="team_lead">小组长</Select.Option>
+              <Select.Option value="reviewer">审核员</Select.Option>
+              <Select.Option value="member">普通成员</Select.Option>
+            </Select>
+          </Form.Item>
+          <Form.Item name="groupId" label="所属分组">
+            <Select allowClear placeholder="选择分组">
+              {groups.map(g => <Select.Option key={g.id} value={g.id}>{g.name}</Select.Option>)}
+            </Select>
           </Form.Item>
         </Form>
       </Modal>
 
       {/* 分组编辑弹窗 */}
-      <Modal
-        title={editingGroup ? '编辑分组' : '新建分组'}
-        open={groupModalOpen}
-        onOk={handleGroupSave}
-        onCancel={() => {
-          setGroupModalOpen(false);
-          setEditingGroup(null);
-          groupForm.resetFields();
-        }}
-      >
+      <Modal title={editingGroup ? '编辑分组' : '新建分组'} open={groupModal} onOk={handleSaveGroup} onCancel={() => setGroupModal(false)} okText="保存">
         <Form form={groupForm} layout="vertical">
-          <Form.Item name="name" label="分组名称" rules={[{ required: true }]}>
-            <Input placeholder="输入分组名称" />
+          <Form.Item name="name" label="分组名称" rules={[{ required: true, message: '请输入分组名称' }]}>
+            <Input placeholder="如：A组、B组" />
           </Form.Item>
           <Form.Item name="description" label="描述">
-            <Input.TextArea rows={2} placeholder="分组描述（可选）" />
+            <Input.TextArea placeholder="分组描述（可选）" rows={2} />
           </Form.Item>
-          <Form.Item name="color" label="颜色标识" initialValue="#1890ff">
+          <Form.Item name="color" label="标识颜色" initialValue="#1890ff">
             <ColorPicker />
+          </Form.Item>
+          <Form.Item name="leaderId" label="组长">
+            <Select allowClear placeholder="选择组长">
+              {users.filter(u => u.role !== 'member').map(u => (
+                <Select.Option key={u.id} value={u.id}>{u.name}（{u.mis}）</Select.Option>
+              ))}
+            </Select>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 分配任务弹窗 */}
+      <Modal title={`分配任务给：${taskTargetUser?.name}`} open={taskModal} onOk={handleSaveTask} onCancel={() => setTaskModal(false)} okText="分配">
+        <Form form={taskForm} layout="vertical">
+          <Form.Item name="title" label="任务标题" rules={[{ required: true, message: '请输入任务标题' }]}>
+            <Input placeholder="简要描述任务" />
+          </Form.Item>
+          <Form.Item name="description" label="详细描述">
+            <Input.TextArea placeholder="任务详细说明（可选）" rows={3} />
+          </Form.Item>
+          <Form.Item name="dueDate" label="截止日期">
+            <Input type="date" />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 权限审批弹窗 */}
+      <Modal
+        title="审批权限申请"
+        open={reviewModal}
+        onCancel={() => setReviewModal(false)}
+        footer={[
+          <Button key="cancel" onClick={() => setReviewModal(false)}>取消</Button>,
+          <Button key="reject" danger onClick={handleRejectRequest}>拒绝</Button>,
+          <Button key="approve" type="primary" onClick={handleApproveRequest}>批准</Button>,
+        ]}
+      >
+        {reviewingRequest && (
+          <div style={{ marginBottom: 16 }}>
+            <p><strong>申请人：</strong>{reviewingRequest.userName}（{reviewingRequest.userMis}）</p>
+            <p><strong>申请角色：</strong>{ROLE_LABELS[reviewingRequest.requestedRole]}</p>
+            <p><strong>申请理由：</strong>{reviewingRequest.reason}</p>
+          </div>
+        )}
+        <Form form={reviewForm} layout="vertical">
+          <Form.Item name="comment" label="审批意见">
+            <Input.TextArea placeholder="填写审批意见（可选）" rows={2} />
           </Form.Item>
         </Form>
       </Modal>

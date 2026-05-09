@@ -3,7 +3,8 @@
 import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { Spin } from 'antd';
-import { getCurrentUserWithRoles, getSession } from '@/lib/supabase/auth';
+import { getCurrentUser } from '@/lib/supabase/auth';
+import { initializeSystem } from '@/lib/db';
 import { useAuthStore } from '@/lib/store/auth';
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -12,21 +13,12 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const pathname = usePathname();
 
   useEffect(() => {
-    const initAuth = async () => {
-      try {
-        const session = getSession();
-        if (session) {
-          const userWithRoles = await getCurrentUserWithRoles();
-          setUser(userWithRoles);
-        } else {
-          setUser(null);
-        }
-      } catch {
-        setUser(null);
-      }
-    };
+    // 初始化系统（创建默认数据）
+    initializeSystem();
 
-    initAuth();
+    // 检查登录状态
+    const user = getCurrentUser();
+    setUser(user);
   }, [setUser]);
 
   // 路由保护
@@ -44,14 +36,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
   if (isLoading) {
     return (
-      <div
-        style={{
-          height: '100vh',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
+      <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <Spin size="large" tip="加载中..." />
       </div>
     );

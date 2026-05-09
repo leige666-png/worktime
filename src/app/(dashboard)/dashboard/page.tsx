@@ -1,172 +1,189 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card, Col, Row, Statistic, Typography, Tag, List, Space, message } from 'antd';
+import { Card, Row, Col, Statistic, Typography, List, Tag, Empty, Button, Space } from 'antd';
 import {
   ClockCircleOutlined,
   WarningOutlined,
   CheckCircleOutlined,
   ExclamationCircleOutlined,
+  BellOutlined,
 } from '@ant-design/icons';
+import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/store/auth';
-import { getDashboardStats, getRecentRecords, getPendingApprovals } from '@/lib/services/dashboard';
+import { overtimeDB, worklossDB, notificationDB, permissionRequestDB } from '@/lib/db';
 import dayjs from 'dayjs';
 
-const { Title } = Typography;
-
-const statusMap: Record<string, { color: string; text: string }> = {
-  pending: { color: 'orange', text: '待审批' },
-  approved: { color: 'green', text: '已通过' },
-  rejected: { color: 'red', text: '已驳回' },
-  revoked: { color: 'default', text: '已撤回' },
-};
+const { Title, Text } = Typography;
 
 export default function DashboardPage() {
-  const { user, hasRole } = useAuthStore();
-  const [stats, setStats] = useState({ totalOvertimeHours: 0, totalWorklossHours: 0, pendingCount: 0, approvedCount: 0 });
-  const [recentRecords, setRecentRecords] = useState<any[]>([]);
-  const [pendingApprovals, setPendingApprovals] = useState<{ overtime: any[]; workloss: any[] }>({ overtime: [], workloss: [] });
-  const [loading, setLoading] = useState(true);
-
-  const canApprove = hasRole('admin') || hasRole('team_lead') || hasRole('reviewer');
+  const { user, canReview } = useAuthStore();
+  const router = useRouter();
+  const [stats, setStats] = useState({
+    monthOvertimeHours: 0,
+    monthWorklossHours: 0,
+    pendingApproval: 0,
+    anomalyCount: 0,
+    pendingPermissions: 0,
+  });
+  const [recentNotifications, setRecentNotifications] = useState<any[]>([]);
 
   useEffect(() => {
     if (!user) return;
 
-    const loadDashboard = async () => {
-      try {
-        const [statsData, recentData] = await Promise.all([
-          getDashboardStats(user.id),
-          getRecentRecords(user.id),
-        ]);
-        setStats(statsData);
-        setRecentRecords(recentData);
+    const monthStart = dayjs().startOf('month').format('YYYY-MM-DD');
+    const monthEnd = dayjs().endOf('month').format('YYYY-MM-DD');
 
-        if (canApprove) {
-          const approvals = await getPendingApprovals(user.id);
-          setPendingApprovals(approvals);
-        }
-      } catch (error: any) {
-        message.error('加载数据失败');
-      } finally {
-        setLoading(false);
-      }
-    };
+    // 本月加班时长（已审批）
+    const overtimeRecords = overtimeDB.getByUser(user.id)
+      .filter(r => r.status === 'approved' && r.date >= monthStart && r.date <= monthEnd);
+    const monthOvertimeMinutes = overtimeRecords.reduce((sum, r) => sum + r.timeDuration, 0);
 
-    loadDashboard();
-  }, [user, canApprove]);
+    // 本月工损时长（已审批）
+    const worklossRecords = worklossDB.getByUser(user.id)
+      .filter(r => r.status === 'approved' && r.date >= monthStart && r.date <= monthEnd);
+    const monthWorklossMinutes = worklossRecords.reduce((sum, r) => sum + r.timeDuration, 0);
 
-  const totalPendingApprovals = pendingApprovals.overtime.length + pendingApprovals.workloss.length;
+    // 待审批数量（管理员/审核员可见）
+    const pendingApproval = canReview()
+      ? overtimeDB.getPending().length + worklossDB.getPending().length
+      : 0;
+
+    // 异常记录数
+    const allOvertime = overtimeDB.getByUser(user.id);
+    const allWorkloss = worklossDB.getByUser(user.id);
+    const anomalyCount = allOvertime.filter(r => r.hasAnomaly).length + allWorkloss.filter(r => r.hasAnomaly).length;
+
+    // 待审批权限申请
+    const pendingPermissions = canReview() ? permissionRequestDB.getPending().length : 0;
+
+    setStats({
+      monthOvertimeHours: Math.round(monthOvertimeMinutes / 60 * 10) / 10,
+      monthWorklossHours: Math.round(monthWorklossMinutes / 60 * 10) / 10,
+      pendingApproval,
+      anomalyCount,
+      pendingPermissions,
+    });
+
+    // 最近通知
+    const notifications = notificationDB.getByUser(user.id).slice(0, 8);
+    setRecentNotifications(notifications);
+  }, [user, canReview]);
+
+  if (!user) return null;
 
   return (
     <div>
-      <Title level={4}>
-        {user?.name ? `${user.name}，` : ''}欢迎回来
+      <Title level={4} style={{ marginBottom: 24 }}>
+        欢迎回来，{user.name}
       </Title>
 
-      <Row gutter={[16, 16]}>
+      {/* 统计卡片 */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         <Col xs={24} sm={12} lg={6}>
-          <Card loading={loading}>
+          <Card hoverable onClick={() => router.push('/overtime')}>
             <Statistic
               title="本月加班时长"
-              value={stats.totalOvertimeHours}
+              value={stats.monthOvertimeHours}
               suffix="小时"
-              prefix={<ClockCircleOutlined />}
+              prefix={<ClockCircleOutlined style={{ color: '#1890ff' }} />}
               valueStyle={{ color: '#1890ff' }}
             />
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Card loading={loading}>
+          <Card hoverable onClick={() => router.push('/workloss')}>
             <Statistic
               title="本月工损时长"
-              value={stats.totalWorklossHours}
+              value={stats.monthWorklossHours}
               suffix="小时"
-              prefix={<WarningOutlined />}
+              prefix={<WarningOutlined style={{ color: '#faad14' }} />}
               valueStyle={{ color: '#faad14' }}
             />
           </Card>
         </Col>
+        {canReview() && (
+          <Col xs={24} sm={12} lg={6}>
+            <Card hoverable>
+              <Statistic
+                title="待审批"
+                value={stats.pendingApproval + stats.pendingPermissions}
+                suffix="条"
+                prefix={<CheckCircleOutlined style={{ color: '#52c41a' }} />}
+                valueStyle={{ color: '#52c41a' }}
+              />
+            </Card>
+          </Col>
+        )}
         <Col xs={24} sm={12} lg={6}>
-          <Card loading={loading}>
+          <Card>
             <Statistic
-              title="我的待审批"
-              value={stats.pendingCount}
-              prefix={<ExclamationCircleOutlined />}
-              valueStyle={{ color: '#ff4d4f' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card loading={loading}>
-            <Statistic
-              title="已通过"
-              value={stats.approvedCount}
-              prefix={<CheckCircleOutlined />}
-              valueStyle={{ color: '#52c41a' }}
+              title="异常记录"
+              value={stats.anomalyCount}
+              suffix="条"
+              prefix={<ExclamationCircleOutlined style={{ color: '#ff4d4f' }} />}
+              valueStyle={{ color: stats.anomalyCount > 0 ? '#ff4d4f' : '#8c8c8c' }}
             />
           </Card>
         </Col>
       </Row>
 
-      <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
-        <Col xs={24} lg={12}>
-          <Card title="最近加班记录" extra={<a href="/overtime">查看全部</a>} loading={loading}>
-            {recentRecords.length > 0 ? (
-              <List
-                size="small"
-                dataSource={recentRecords}
-                renderItem={(item: any) => (
-                  <List.Item>
-                    <Space>
-                      <span>{item.date}</span>
-                      <Tag color={item.overtime_types?.color}>{item.overtime_types?.name}</Tag>
-                      <span>{Math.floor((item.duration_minutes || 0) / 60)}h{(item.duration_minutes || 0) % 60}m</span>
-                    </Space>
-                    <Tag color={statusMap[item.status]?.color}>{statusMap[item.status]?.text}</Tag>
-                  </List.Item>
-                )}
-              />
-            ) : (
-              <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>
-                暂无记录，去<a href="/overtime">申报加班</a>
-              </div>
-            )}
-          </Card>
-        </Col>
-        <Col xs={24} lg={12}>
-          <Card
-            title="待处理审批"
-            extra={canApprove ? <Tag color="red">{totalPendingApprovals}</Tag> : null}
-            loading={loading}
-          >
-            {canApprove && totalPendingApprovals > 0 ? (
-              <List
-                size="small"
-                dataSource={[
-                  ...pendingApprovals.overtime.map((r) => ({ ...r, _type: '加班' })),
-                  ...pendingApprovals.workloss.map((r) => ({ ...r, _type: '工损' })),
-                ]}
-                renderItem={(item: any) => (
-                  <List.Item>
-                    <Space>
-                      <Tag color={item._type === '加班' ? 'blue' : 'orange'}>{item._type}</Tag>
-                      <span>{item.users?.name}</span>
-                      <span>{item.date}</span>
-                      <span>{Math.floor((item.duration_minutes || 0) / 60)}h</span>
-                    </Space>
-                    <a href={item._type === '加班' ? '/overtime' : '/workloss'}>去审批</a>
-                  </List.Item>
-                )}
-              />
-            ) : (
-              <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>
-                {canApprove ? '暂无待处理审批' : '您没有审批权限'}
-              </div>
-            )}
+      {/* 快捷操作 */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+        <Col span={24}>
+          <Card title="快捷操作" size="small">
+            <Space wrap>
+              <Button type="primary" onClick={() => router.push('/overtime')}>
+                填报加班
+              </Button>
+              <Button onClick={() => router.push('/workloss')}>
+                填报工损
+              </Button>
+              {canReview() && (
+                <Button onClick={() => router.push('/statistics')}>
+                  查看统计
+                </Button>
+              )}
+              <Button onClick={() => router.push('/profile')}>
+                个人中心
+              </Button>
+            </Space>
           </Card>
         </Col>
       </Row>
+
+      {/* 最近通知 */}
+      <Card
+        title={<><BellOutlined /> 最近通知</>}
+        size="small"
+        extra={<a onClick={() => router.push('/profile')}>查看全部</a>}
+      >
+        {recentNotifications.length > 0 ? (
+          <List
+            size="small"
+            dataSource={recentNotifications}
+            renderItem={(item) => (
+              <List.Item>
+                <List.Item.Meta
+                  title={
+                    <Space>
+                      {!item.isRead && <Tag color="red" style={{ fontSize: 10, lineHeight: '16px', padding: '0 4px' }}>新</Tag>}
+                      <Text style={{ fontSize: 13 }}>{item.title}</Text>
+                    </Space>
+                  }
+                  description={
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      {item.content?.slice(0, 60)}{item.content?.length > 60 ? '...' : ''} · {dayjs(item.createdAt).format('MM-DD HH:mm')}
+                    </Text>
+                  }
+                />
+              </List.Item>
+            )}
+          />
+        ) : (
+          <Empty description="暂无通知" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        )}
+      </Card>
     </div>
   );
 }

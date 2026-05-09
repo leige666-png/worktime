@@ -1,262 +1,269 @@
-// 数据库类型定义
-export interface Database {
-  public: {
-    Tables: {
-      users: {
-        Row: User;
-        Insert: Omit<User, 'id' | 'created_at' | 'login_count'>;
-        Update: Partial<Omit<User, 'id'>>;
-      };
-      roles: {
-        Row: Role;
-        Insert: Omit<Role, 'id' | 'created_at'>;
-        Update: Partial<Omit<Role, 'id'>>;
-      };
-      user_roles: {
-        Row: UserRole;
-        Insert: Omit<UserRole, 'id' | 'assigned_at'>;
-        Update: Partial<Omit<UserRole, 'id'>>;
-      };
-      groups: {
-        Row: Group;
-        Insert: Omit<Group, 'id' | 'created_at' | 'updated_at'>;
-        Update: Partial<Omit<Group, 'id'>>;
-      };
-      user_groups: {
-        Row: UserGroup;
-        Insert: Omit<UserGroup, 'id' | 'joined_at'>;
-        Update: Partial<Omit<UserGroup, 'id'>>;
-      };
-      overtime_types: {
-        Row: OvertimeType;
-        Insert: Omit<OvertimeType, 'id' | 'created_at'>;
-        Update: Partial<Omit<OvertimeType, 'id'>>;
-      };
-      workloss_types: {
-        Row: WorklossType;
-        Insert: Omit<WorklossType, 'id' | 'created_at'>;
-        Update: Partial<Omit<WorklossType, 'id'>>;
-      };
-      overtime_records: {
-        Row: OvertimeRecord;
-        Insert: Omit<OvertimeRecord, 'id' | 'created_at' | 'updated_at' | 'duration_minutes' | 'anomaly_flag' | 'anomaly_reason'>;
-        Update: Partial<Omit<OvertimeRecord, 'id' | 'duration_minutes'>>;
-      };
-      workloss_records: {
-        Row: WorklossRecord;
-        Insert: Omit<WorklossRecord, 'id' | 'created_at' | 'updated_at' | 'duration_minutes' | 'anomaly_flag' | 'anomaly_reason'>;
-        Update: Partial<Omit<WorklossRecord, 'id' | 'duration_minutes'>>;
-      };
-      notifications: {
-        Row: Notification;
-        Insert: Omit<Notification, 'id' | 'created_at'>;
-        Update: Partial<Omit<Notification, 'id'>>;
-      };
-      audit_logs: {
-        Row: AuditLog;
-        Insert: Omit<AuditLog, 'id' | 'created_at'>;
-        Update: never;
-      };
-      permission_requests: {
-        Row: PermissionRequest;
-        Insert: Omit<PermissionRequest, 'id' | 'created_at'>;
-        Update: Partial<Omit<PermissionRequest, 'id'>>;
-      };
-    };
-    Functions: {
-      get_user_monthly_stats: {
-        Args: { p_user_id: string; p_year: number; p_month: number };
-        Returns: MonthlyStats[];
-      };
-    };
-  };
-}
+/**
+ * 工时管理系统 - 数据模型定义
+ * 
+ * 设计原则：
+ * 1. 所有实体都有 id、createdAt 字段
+ * 2. 关联关系通过 ID 引用，查询时再组装
+ * 3. 状态字段使用联合类型，确保类型安全
+ * 4. 计算字段在写入时就计算好，避免读取时重复计算
+ */
 
-// 基础类型
+// ========== 基础类型 ==========
+
+/** 用户角色等级：admin > team_lead > reviewer > member */
+export type UserRole = 'admin' | 'team_lead' | 'reviewer' | 'member';
+
+/** 角色中文映射 */
+export const ROLE_LABELS: Record<UserRole, string> = {
+  admin: '管理员',
+  team_lead: '小组长',
+  reviewer: '审核员',
+  member: '普通成员',
+};
+
+/** 角色权限等级（数字越大权限越高） */
+export const ROLE_LEVELS: Record<UserRole, number> = {
+  admin: 100,
+  team_lead: 80,
+  reviewer: 60,
+  member: 10,
+};
+
+// ========== 用户 ==========
+
 export interface User {
   id: string;
   mis: string;
   name: string;
   avatar: string | null;
-  status: 'active' | 'inactive' | 'frozen';
-  department: string | null;
-  password_hash: string | null;
-  created_at: string;
-  last_login: string | null;
-  login_count: number;
+  role: UserRole;
+  groupId: string | null;
+  status: 'active' | 'pending_approval'; // pending_approval = 首次登录待审批
+  passwordHash: string;
+  createdAt: string;
+  lastLogin: string | null;
+  loginCount: number;
 }
 
-export interface Role {
+// ========== 权限申请 ==========
+
+export interface PermissionRequest {
   id: string;
-  name: string;
-  display_name: string;
-  description: string | null;
-  level: number;
-  permissions: Record<string, boolean>;
-  created_at: string;
+  userId: string;
+  userName: string;
+  userMis: string;
+  requestedRole: UserRole;
+  reason: string;
+  status: 'pending' | 'approved' | 'rejected';
+  reviewerId: string | null;
+  reviewerName: string | null;
+  reviewComment: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
 }
 
-export interface UserRole {
-  id: string;
-  user_id: string;
-  role_id: string;
-  assigned_by: string | null;
-  assigned_at: string;
-}
+// ========== 分组 ==========
 
 export interface Group {
   id: string;
   name: string;
   description: string | null;
   color: string;
-  leader_id: string | null;
-  parent_id: string | null;
-  sort_order: number;
-  created_by: string | null;
-  created_at: string;
-  updated_at: string;
+  leaderId: string | null;
+  leaderName: string | null;
+  memberCount: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
-export interface UserGroup {
-  id: string;
-  user_id: string;
-  group_id: string;
-  joined_at: string;
-}
+// ========== 加班类型 ==========
 
 export interface OvertimeType {
   id: string;
   name: string;
-  code: string;
-  description: string | null;
-  multiplier: number;
   color: string;
-  is_active: boolean;
-  created_at: string;
+  defaultEfficiency: number; // 默认人效（件/小时）
+  description: string | null;
+  isActive: boolean;
+  sortOrder: number;
+  createdAt: string;
 }
+
+// ========== 工损类型 ==========
 
 export interface WorklossType {
   id: string;
   name: string;
-  code: string;
-  description: string | null;
   color: string;
-  is_active: boolean;
-  created_at: string;
+  defaultEfficiency: number;
+  description: string | null;
+  isActive: boolean;
+  sortOrder: number;
+  createdAt: string;
 }
+
+// ========== 加班记录 ==========
 
 export interface OvertimeRecord {
   id: string;
-  user_id: string;
-  type_id: string;
-  date: string;
-  start_time: string;
-  end_time: string;
-  duration_minutes: number;
-  workload_description: string | null;
-  workload_amount: number | null;
-  efficiency_score: number;
-  expected_duration_minutes: number | null;
-  anomaly_flag: boolean;
-  anomaly_reason: string | null;
-  status: 'pending' | 'approved' | 'rejected' | 'revoked';
-  submitted_at: string;
-  reviewer_id: string | null;
-  reviewed_at: string | null;
-  review_comment: string | null;
-  attachments: unknown[];
-  created_at: string;
-  updated_at: string;
+  // 人员信息
+  userId: string;
+  userName: string;
+  userMis: string;
+  groupId: string | null;
+  groupName: string | null;
+  // 时间信息
+  date: string; // YYYY-MM-DD
+  startTime: string; // HH:mm
+  endTime: string; // HH:mm
+  /** 时间差计算的时长（分钟）= endTime - startTime */
+  timeDuration: number;
+  // 类型与内容
+  typeId: string;
+  typeName: string;
+  task: string; // 加班事项（具体内容名称）
+  // 量化信息
+  /** 人效（件/小时），由申请人填写 */
+  efficiency: number;
+  /** 加班量级（件数），由申请人填写 */
+  workload: number;
+  /** 量级计算的时长（分钟）= (workload / efficiency) * 60 */
+  calculatedDuration: number;
+  // 异常检测
+  /** 两种时长是否存在异常偏差 */
+  hasAnomaly: boolean;
+  /** 异常原因描述 */
+  anomalyReason: string | null;
+  /** 偏差百分比 = |timeDuration - calculatedDuration| / calculatedDuration * 100 */
+  deviationPercent: number;
+  // 证明材料
+  proof: string | null; // 证明描述或文件名
+  // 审批流
+  status: 'pending' | 'approved' | 'rejected';
+  submittedBy: string; // 提交人ID（管理员可代提交）
+  submittedByName: string;
+  reviewerId: string | null;
+  reviewerName: string | null;
+  reviewedAt: string | null;
+  reviewComment: string | null;
+  // 时间戳
+  createdAt: string;
+  updatedAt: string;
 }
+
+// ========== 工损记录 ==========
 
 export interface WorklossRecord {
   id: string;
-  user_id: string;
-  type_id: string;
+  // 人员信息
+  userId: string;
+  userName: string;
+  userMis: string;
+  groupId: string | null;
+  groupName: string | null;
+  // 时间信息
   date: string;
-  start_time: string;
-  end_time: string;
-  duration_minutes: number;
-  description: string;
-  impact_level: 'low' | 'medium' | 'high' | 'critical';
-  affected_tasks: string | null;
-  workload_lost: number | null;
-  efficiency_before: number;
-  efficiency_after: number;
-  anomaly_flag: boolean;
-  anomaly_reason: string | null;
-  status: 'pending' | 'approved' | 'rejected' | 'revoked';
-  submitted_at: string;
-  reviewer_id: string | null;
-  reviewed_at: string | null;
-  review_comment: string | null;
-  attachments: unknown[];
-  created_at: string;
-  updated_at: string;
+  startTime: string;
+  endTime: string;
+  timeDuration: number;
+  // 类型与内容
+  typeId: string;
+  typeName: string;
+  task: string; // 工损事项
+  // 量化信息
+  efficiency: number;
+  workload: number;
+  calculatedDuration: number;
+  // 异常检测
+  hasAnomaly: boolean;
+  anomalyReason: string | null;
+  deviationPercent: number;
+  // 证明材料
+  proof: string | null;
+  // 审批流
+  status: 'pending' | 'approved' | 'rejected';
+  submittedBy: string;
+  submittedByName: string;
+  reviewerId: string | null;
+  reviewerName: string | null;
+  reviewedAt: string | null;
+  reviewComment: string | null;
+  // 时间戳
+  createdAt: string;
+  updatedAt: string;
 }
+
+// ========== 通知 ==========
+
+export type NotificationType =
+  | 'permission_request'   // 有人申请权限（发给管理员）
+  | 'permission_approved'  // 权限申请通过（发给申请人）
+  | 'permission_rejected'  // 权限申请拒绝（发给申请人）
+  | 'record_submitted'     // 有人提交记录待审批（发给审核员/管理员）
+  | 'record_approved'      // 记录审批通过（发给提交人）
+  | 'record_rejected'      // 记录审批拒绝（发给提交人）
+  | 'anomaly_alert'        // 异常警报（发给管理员）
+  | 'task_assigned'        // 任务分配（发给被分配人）
+  | 'system';             // 系统通知
 
 export interface Notification {
   id: string;
-  user_id: string;
+  userId: string; // 接收人
   title: string;
-  content: string | null;
-  type: 'approval_request' | 'approval_result' | 'anomaly_alert' | 'system' | 'reminder';
-  related_type: string | null;
-  related_id: string | null;
-  is_read: boolean;
-  created_at: string;
+  content: string;
+  type: NotificationType;
+  relatedId: string | null; // 关联的记录/申请ID
+  isRead: boolean;
+  createdAt: string;
 }
 
-export interface AuditLog {
+// ========== 任务分配 ==========
+
+export interface TaskAssignment {
   id: string;
-  user_id: string | null;
-  action: string;
-  target_type: string;
-  target_id: string | null;
-  old_value: unknown | null;
-  new_value: unknown | null;
-  ip_address: string | null;
-  user_agent: string | null;
-  created_at: string;
+  userId: string; // 被分配人
+  userName: string;
+  title: string;
+  description: string | null;
+  assignedBy: string; // 分配人ID
+  assignedByName: string;
+  status: 'pending' | 'in_progress' | 'completed';
+  dueDate: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
-export interface PermissionRequest {
-  id: string;
-  requester_id: string;
-  requested_role: string;
-  reason: string | null;
-  status: 'pending' | 'approved' | 'rejected';
-  reviewer_id: string | null;
-  reviewed_at: string | null;
-  review_comment: string | null;
-  created_at: string;
+// ========== 系统配置 ==========
+
+export interface SystemConfig {
+  /** 异常偏差阈值（百分比），超过此值触发警报 */
+  anomalyThreshold: number;
+  /** 系统名称 */
+  systemName: string;
+  /** 是否允许自主注册 */
+  allowSelfRegister: boolean;
 }
+
+// ========== 统计相关 ==========
 
 export interface MonthlyStats {
-  total_overtime_minutes: number;
-  total_workloss_minutes: number;
-  overtime_count: number;
-  workloss_count: number;
-  approved_overtime_minutes: number;
-  approved_workloss_minutes: number;
-  anomaly_count: number;
-  avg_efficiency: number;
+  userId: string;
+  userName: string;
+  groupName: string | null;
+  year: number;
+  month: number;
+  totalOvertimeMinutes: number;
+  totalWorklossMinutes: number;
+  overtimeCount: number;
+  worklossCount: number;
+  anomalyCount: number;
 }
 
-// 扩展类型（带关联数据）
-export interface UserWithRoles extends User {
-  roles: Role[];
-  groups: Group[];
-}
-
-export interface OvertimeRecordWithDetails extends OvertimeRecord {
-  user: User;
-  type: OvertimeType;
-  reviewer: User | null;
-}
-
-export interface WorklossRecordWithDetails extends WorklossRecord {
-  user: User;
-  type: WorklossType;
-  reviewer: User | null;
+export interface GroupStats {
+  groupId: string;
+  groupName: string;
+  totalOvertimeMinutes: number;
+  totalWorklossMinutes: number;
+  memberCount: number;
+  recordCount: number;
 }
