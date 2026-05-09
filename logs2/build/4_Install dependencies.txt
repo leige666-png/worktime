@@ -1,0 +1,8 @@
+﻿2026-05-09T07:36:50.0133046Z ##[group]Run npm ci --legacy-peer-deps
+2026-05-09T07:36:50.0133639Z [36;1mnpm ci --legacy-peer-deps[0m
+2026-05-09T07:36:50.0168562Z shell: /usr/bin/bash -e {0}
+2026-05-09T07:36:50.0168990Z ##[endgroup]
+2026-05-09T07:38:03.3762426Z npm error Exit handler never called!
+2026-05-09T07:38:03.3763604Z npm error This is an error with npm itself. Please report this error at:
+2026-05-09T07:38:03.3764328Z npm error   <https://github.com/npm/cli/issues>
+2026-05-09T07:38:03.3765335Z npm error A complete log of this run can be found in: /home/runner/.npm/_logs/2026-05-09T07_36_50_079Z-debug-0.log

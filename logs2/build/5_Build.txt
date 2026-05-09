@@ -1,0 +1,9 @@
+﻿2026-05-09T07:38:03.3894440Z ##[group]Run ./node_modules/.bin/next build
+2026-05-09T07:38:03.3894800Z [36;1m./node_modules/.bin/next build[0m
+2026-05-09T07:38:03.3915800Z shell: /usr/bin/bash -e {0}
+2026-05-09T07:38:03.3916045Z env:
+2026-05-09T07:38:03.3916499Z   NEXT_PUBLIC_SUPABASE_URL: ***
+2026-05-09T07:38:03.3917535Z   NEXT_PUBLIC_SUPABASE_ANON_KEY: ***
+2026-05-09T07:38:03.3917787Z ##[endgroup]
+2026-05-09T07:38:03.3964039Z /home/runner/work/_temp/960052de-3528-407b-aae0-d391de1323d4.sh: line 1: ./node_modules/.bin/next: No such file or directory
+2026-05-09T07:38:03.3976051Z ##[error]Process completed with exit code 127.
