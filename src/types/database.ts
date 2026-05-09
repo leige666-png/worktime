@@ -80,6 +80,7 @@ export interface User {
   avatar: string | null;
   status: 'active' | 'inactive' | 'frozen';
   department: string | null;
+  password_hash: string | null;
   created_at: string;
   last_login: string | null;
   login_count: number;
