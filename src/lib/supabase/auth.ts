@@ -8,7 +8,7 @@ export async function signInWithMeituanSSO() {
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'meituan' as any, // 美团定制 provider
     options: {
-      redirectTo: `${window.location.origin}/api/auth/callback`,
+      redirectTo: `${window.location.origin}/worktime/dashboard`,
     },
   });
 

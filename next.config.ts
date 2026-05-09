@@ -1,8 +1,16 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // 启用 standalone 输出模式，生成独立可部署的产物
-  output: "standalone",
+  // 静态导出模式，用于 GitHub Pages 部署
+  output: "export",
+
+  // GitHub Pages 部署路径（仓库名）
+  basePath: "/worktime",
+
+  // 图片优化在静态导出时需要关闭
+  images: {
+    unoptimized: true,
+  },
 
   // 生产环境关闭 source map 减小体积
   productionBrowserSourceMaps: false,
