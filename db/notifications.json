@@ -38,5 +38,75 @@
     "relatedId": "moy851lu01foh4it",
     "isRead": false,
     "createdAt": "2026-05-09T10:51:50.246Z"
+  },
+  {
+    "id": "moy8530wair24ctq",
+    "userId": "moy828yotn06fno5",
+    "title": "⚠️ 加班异常警报",
+    "content": "吴静文 的加班记录存在时长偏差（偏差100%），时间计算61分钟 vs 量级计算33578分钟。事项：12312",
+    "type": "anomaly_alert",
+    "relatedId": "moy850j4q1ypwnpp",
+    "isRead": false,
+    "createdAt": "2026-05-09T10:51:50.289Z"
+  },
+  {
+    "id": "moy8530zj6t74zqb",
+    "userId": "moy828yotn06fno5",
+    "title": "⚠️ 加班异常警报",
+    "content": "吴静文 的加班记录存在时长偏差（偏差100%），时间计算61分钟 vs 量级计算33578分钟。事项：12312",
+    "type": "anomaly_alert",
+    "relatedId": "moy852dlvuo54t5t",
+    "isRead": false,
+    "createdAt": "2026-05-09T10:51:50.291Z"
+  },
+  {
+    "id": "moy8531413pt3ydk",
+    "userId": "moy828yotn06fno5",
+    "title": "⚠️ 加班异常警报",
+    "content": "吴静文 的加班记录存在时长偏差（偏差100%），时间计算61分钟 vs 量级计算33578分钟。事项：12312",
+    "type": "anomaly_alert",
+    "relatedId": "moy851u9m9mhryd1",
+    "isRead": false,
+    "createdAt": "2026-05-09T10:51:50.297Z"
+  },
+  {
+    "id": "moy8533dwm40k9lw",
+    "userId": "moy828yotn06fno5",
+    "title": "⚠️ 加班异常警报",
+    "content": "吴静文 的加班记录存在时长偏差（偏差100%），时间计算61分钟 vs 量级计算33578分钟。事项：12312",
+    "type": "anomaly_alert",
+    "relatedId": "moy851ppixlvpcuu",
+    "isRead": false,
+    "createdAt": "2026-05-09T10:51:50.377Z"
+  },
+  {
+    "id": "moy8535alei114ms",
+    "userId": "moy828yotn06fno5",
+    "title": "⚠️ 加班异常警报",
+    "content": "吴静文 的加班记录存在时长偏差（偏差100%），时间计算61分钟 vs 量级计算33578分钟。事项：12312",
+    "type": "anomaly_alert",
+    "relatedId": "moy851xffvxr6rts",
+    "isRead": false,
+    "createdAt": "2026-05-09T10:51:50.446Z"
+  },
+  {
+    "id": "moy853cb7kd7kmqp",
+    "userId": "moy828yotn06fno5",
+    "title": "⚠️ 加班异常警报",
+    "content": "吴静文 的加班记录存在时长偏差（偏差100%），时间计算61分钟 vs 量级计算33578分钟。事项：12312",
+    "type": "anomaly_alert",
+    "relatedId": "moy852jvxdoo2chi",
+    "isRead": false,
+    "createdAt": "2026-05-09T10:51:50.699Z"
+  },
+  {
+    "id": "moy853lluyuvlgf9",
+    "userId": "moy828yotn06fno5",
+    "title": "新的加班申请待审批",
+    "content": "吴静文 提交了 2026-05-01 的加班申请（队列加班：12312），时长1小时，请审批。",
+    "type": "record_submitted",
+    "relatedId": "moy851lu01foh4it",
+    "isRead": false,
+    "createdAt": "2026-05-09T10:51:51.033Z"
   }
 ]
