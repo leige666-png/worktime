@@ -1,0 +1,28 @@
+[
+  {
+    "id": "test_a_moy5rvj7",
+    "mis": "test_user_a",
+    "name": "测试用户A",
+    "avatar": null,
+    "role": "admin",
+    "groupId": null,
+    "status": "active",
+    "passwordHash": "fake_hash_a",
+    "createdAt": "2026-05-09T09:45:34.819Z",
+    "lastLogin": "2026-05-09T09:45:34.821Z",
+    "loginCount": 1
+  },
+  {
+    "id": "test_b_moy5rvj9",
+    "mis": "test_user_b",
+    "name": "测试用户B",
+    "avatar": null,
+    "role": "member",
+    "groupId": null,
+    "status": "active",
+    "passwordHash": "fake_hash_b",
+    "createdAt": "2026-05-09T09:45:34.821Z",
+    "lastLogin": "2026-05-09T09:45:34.821Z",
+    "loginCount": 1
+  }
+]
