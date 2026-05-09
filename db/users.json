@@ -11,5 +11,18 @@
     "createdAt": "2026-05-09T10:05:10.062Z",
     "lastLogin": "2026-05-09T10:05:10.063Z",
     "loginCount": 1
+  },
+  {
+    "id": "moy6h30j02uvvujh",
+    "mis": "test_member_1778321110915",
+    "name": "测试成员B",
+    "avatar": null,
+    "role": "member",
+    "groupId": null,
+    "status": "active",
+    "passwordHash": "910925ebf43ae78e991fcef4c80ad8f3c7185bdd6281e1a5226316aace981be1",
+    "createdAt": "2026-05-09T10:05:10.916Z",
+    "lastLogin": "2026-05-09T10:05:10.916Z",
+    "loginCount": 1
   }
 ]
