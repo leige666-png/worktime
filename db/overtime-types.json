@@ -5,7 +5,7 @@
     "color": "#1890ff",
     "defaultEfficiency": 30,
     "description": "队列相关加班工作",
-    "isActive": true,
+    "isActive": false,
     "sortOrder": 1,
     "createdAt": "2026-05-09T09:51:12.235Z"
   },
