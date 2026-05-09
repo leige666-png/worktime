@@ -1,1 +1,15 @@
-[]
+[
+  {
+    "id": "moy828yotn06fno5",
+    "mis": "wb_aijunlei",
+    "name": "艾俊磊",
+    "avatar": null,
+    "role": "admin",
+    "groupId": null,
+    "status": "active",
+    "passwordHash": "31500ca12124f36ca5fbb4dda132d47c5fad69983c3baffaaedec51ab2146440",
+    "createdAt": "2026-05-09T10:49:38.016Z",
+    "lastLogin": "2026-05-09T10:49:38.016Z",
+    "loginCount": 1
+  }
+]
