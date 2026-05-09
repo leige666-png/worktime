@@ -1,1 +1,42 @@
-[]
+[
+  {
+    "id": "moy852illsi2rbq8",
+    "userId": "moy828yotn06fno5",
+    "title": "⚠️ 加班异常警报",
+    "content": "吴静文 的加班记录存在时长偏差（偏差100%），时间计算61分钟 vs 量级计算33578分钟。事项：12312",
+    "type": "anomaly_alert",
+    "relatedId": "moy84zy0gfq2nuig",
+    "isRead": false,
+    "createdAt": "2026-05-09T10:51:49.629Z"
+  },
+  {
+    "id": "moy852jzh92xwav6",
+    "userId": "moy828yotn06fno5",
+    "title": "⚠️ 加班异常警报",
+    "content": "吴静文 的加班记录存在时长偏差（偏差100%），时间计算61分钟 vs 量级计算33578分钟。事项：12312",
+    "type": "anomaly_alert",
+    "relatedId": "moy850umvawatdkx",
+    "isRead": false,
+    "createdAt": "2026-05-09T10:51:49.679Z"
+  },
+  {
+    "id": "moy852k032krprvk",
+    "userId": "moy828yotn06fno5",
+    "title": "⚠️ 加班异常警报",
+    "content": "吴静文 的加班记录存在时长偏差（偏差100%），时间计算61分钟 vs 量级计算33578分钟。事项：12312",
+    "type": "anomaly_alert",
+    "relatedId": "moy850gmuf3n435o",
+    "isRead": false,
+    "createdAt": "2026-05-09T10:51:49.680Z"
+  },
+  {
+    "id": "moy852zqfq757dro",
+    "userId": "moy828yotn06fno5",
+    "title": "⚠️ 加班异常警报",
+    "content": "吴静文 的加班记录存在时长偏差（偏差100%），时间计算61分钟 vs 量级计算33578分钟。事项：12312",
+    "type": "anomaly_alert",
+    "relatedId": "moy851lu01foh4it",
+    "isRead": false,
+    "createdAt": "2026-05-09T10:51:50.246Z"
+  }
+]
