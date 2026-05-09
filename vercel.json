@@ -1,4 +1,4 @@
 {
-  "installCommand": "npm ci",
+  "installCommand": "corepack enable && pnpm install --no-frozen-lockfile",
   "framework": "nextjs"
 }
