@@ -28,15 +28,5 @@
     "isActive": true,
     "sortOrder": 2,
     "createdAt": "2026-05-10T02:30:45.446Z"
-  },
-  {
-    "id": "moz5ojier5w402h9",
-    "name": "其他加班",
-    "color": "#faad14",
-    "defaultEfficiency": 20,
-    "description": "其他类型加班",
-    "isActive": true,
-    "sortOrder": 3,
-    "createdAt": "2026-05-10T02:30:45.446Z"
   }
 ]
