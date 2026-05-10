@@ -538,5 +538,15 @@
     "relatedId": "moy851xffvxr6rts",
     "isRead": false,
     "createdAt": "2026-05-10T03:03:54.861Z"
+  },
+  {
+    "id": "moz7y7yx41qg2m7f",
+    "userId": "moy844mwg0vh3uhk",
+    "title": "✅ 加班申请已通过",
+    "content": "您 2026-05-01 的加班申请（队列加班：12312）已通过审批。",
+    "type": "record_approved",
+    "relatedId": "moy853efgte6my4v",
+    "isRead": false,
+    "createdAt": "2026-05-10T03:34:16.281Z"
   }
 ]
