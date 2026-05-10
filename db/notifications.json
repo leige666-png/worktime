@@ -608,5 +608,35 @@
     "relatedId": "moz82lvqz0fz3yr4",
     "isRead": false,
     "createdAt": "2026-05-10T03:37:46.625Z"
+  },
+  {
+    "id": "moz8n32p7mx8clap",
+    "userId": "moy828yotn06fno5",
+    "title": "⚠️ 加班异常警报",
+    "content": "艾俊磊 的加班记录存在时长偏差（偏差99%），时间计算367分钟 vs 量级计算36666分钟。事项：很过分合格",
+    "type": "anomaly_alert",
+    "relatedId": "moz8n32njh396mcu",
+    "isRead": false,
+    "createdAt": "2026-05-10T03:53:36.337Z"
+  },
+  {
+    "id": "moz8n32p5o9zaqha",
+    "userId": "moy844mwg0vh3uhk",
+    "title": "⚠️ 加班异常警报",
+    "content": "艾俊磊 的加班记录存在时长偏差（偏差99%），时间计算367分钟 vs 量级计算36666分钟。事项：很过分合格",
+    "type": "anomaly_alert",
+    "relatedId": "moz8n32njh396mcu",
+    "isRead": false,
+    "createdAt": "2026-05-10T03:53:36.337Z"
+  },
+  {
+    "id": "moz8n32psr0vvscc",
+    "userId": "moy844mwg0vh3uhk",
+    "title": "新的加班申请待审批",
+    "content": "艾俊磊 提交了 2026-05-11 的加班申请（其他加班：很过分合格），时长6.1小时，请审批。",
+    "type": "record_submitted",
+    "relatedId": "moz8n32njh396mcu",
+    "isRead": false,
+    "createdAt": "2026-05-10T03:53:36.337Z"
   }
 ]
