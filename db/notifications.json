@@ -606,7 +606,7 @@
     "content": "您 2026-05-09 的加班申请（队列加班：洒水大·）已通过审批。",
     "type": "record_approved",
     "relatedId": "moz82lvqz0fz3yr4",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-10T03:37:46.625Z"
   },
   {
