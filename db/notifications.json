@@ -616,7 +616,7 @@
     "content": "艾俊磊 的加班记录存在时长偏差（偏差99%），时间计算367分钟 vs 量级计算36666分钟。事项：很过分合格",
     "type": "anomaly_alert",
     "relatedId": "moz8n32njh396mcu",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-10T03:53:36.337Z"
   },
   {
