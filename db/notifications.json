@@ -508,5 +508,15 @@
     "relatedId": "moy851lu01foh4it",
     "isRead": false,
     "createdAt": "2026-05-09T11:13:09.458Z"
+  },
+  {
+    "id": "moz6v31jhgzt2a5x",
+    "userId": "moy844mwg0vh3uhk",
+    "title": "❌ 加班申请被驳回",
+    "content": "您 2026-05-01 的加班申请（队列加班：12312）被驳回。原因：审批未通过",
+    "type": "record_rejected",
+    "relatedId": "moy851ppixlvpcuu",
+    "isRead": false,
+    "createdAt": "2026-05-10T03:03:50.311Z"
   }
 ]
