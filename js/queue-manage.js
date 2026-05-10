@@ -1745,6 +1745,19 @@ function showAddQueueModal() {
   const teamOptions = getTeamNames().map(t => `<option value="${t}">${t}</option>`).join('');
   const suggestedId = Math.max(...QUEUES_DATA.map(q => q.id), 0) + 1;
   const templateOptions = _QM_TEMPLATES.map((t, i) => `<option value="${i}">${t.name}</option>`).join('');
+  // 生成人员下拉选项（按团队分组）
+  const memberOptgroup = [];
+  if (typeof TEAMS !== 'undefined') {
+    TEAMS.forEach(t => {
+      const members = (typeof getMembersByTeam !== 'undefined' ? getMembersByTeam(t) : []);
+      if (members.length > 0) {
+        memberOptgroup.push(`<optgroup label="★ ${t}">`);
+        members.forEach(m => memberOptgroup.push(`<option value="${m.name}">${m.name}（${m.mis}）</option>`));
+        memberOptgroup.push(`</optgroup>`);
+      }
+    });
+  }
+  const memberOptionsHtml = memberOptgroup.join('');
 
   const content = `
     <div class="qm-form-template-row">
@@ -1773,8 +1786,11 @@ function showAddQueueModal() {
         <input type="text" class="form-control" id="qmProject" placeholder="如：笔记/客诉/评估">
       </div>
       <div class="form-group">
-        <label class="form-label">Owner</label>
-        <input type="text" class="form-control" id="qmOwner" placeholder="负责人">
+        <label class="form-label">负责人</label>
+        <select class="form-control" id="qmOwner">
+          <option value="">-- 选择负责人 --</option>
+          ${memberOptionsHtml}
+        </select>
       </div>
       <div class="form-group">
         <label class="form-label">优先级</label>
@@ -1908,7 +1924,7 @@ function saveNewQueue() {
   const newQueue = {
     id, name, team,
     project: document.getElementById('qmProject')?.value?.trim() || '',
-    owner: document.getElementById('qmOwner')?.value?.trim() || '',
+    owner: document.getElementById('qmOwner')?.value || '',
     priority: document.getElementById('qmPriority')?.value || 'P3',
     requirement: document.getElementById('qmRequirement')?.value || '',
     effCoef: effCoefVal !== '' ? parseFloat(effCoefVal) : null,
@@ -1943,6 +1959,26 @@ function showEditQueueModal(queueId) {
   const orig = JSON.parse(JSON.stringify(q));
 
   const teamOptions = getTeamNames().map(t => `<option value="${t}" ${t === q.team ? 'selected' : ''}>${t}</option>`).join('');
+  // 生成人员下拉选项（按团队分组）
+  const editMemberOptgroup = [];
+  if (typeof TEAMS !== 'undefined') {
+    TEAMS.forEach(t => {
+      const members = (typeof getMembersByTeam !== 'undefined' ? getMembersByTeam(t) : []);
+      if (members.length > 0) {
+        editMemberOptgroup.push(`<optgroup label="★ ${t}">`);
+        members.forEach(m => editMemberOptgroup.push(`<option value="${m.name}" ${m.name === q.owner ? 'selected' : ''}>${m.name}（${m.mis}）</option>`));
+        editMemberOptgroup.push(`</optgroup>`);
+      }
+    });
+    // 如果现有owner不在人员列表中，也加进去
+    const allMemberNames = TEAMS.flatMap(t => (typeof getMembersByTeam !== 'undefined' ? getMembersByTeam(t) : []).map(m => m.name));
+    if (q.owner && !allMemberNames.includes(q.owner)) {
+      editMemberOptgroup.push(`<optgroup label="★ 其他">`);
+      editMemberOptgroup.push(`<option value="${q.owner}" selected>${q.owner}（不在人员库）</option>`);
+      editMemberOptgroup.push(`</optgroup>`);
+    }
+  }
+  const editMemberOptionsHtml = editMemberOptgroup.join('');
   const content = `
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
       <div class="form-group">
@@ -1962,8 +1998,11 @@ function showEditQueueModal(queueId) {
         <input type="text" class="form-control qm-edit-track" id="qmEditProject" value="${q.project || ''}" data-orig="${q.project || ''}" oninput="_qmTrackEdit(this)" placeholder="如：笔记/客诉/评估">
       </div>
       <div class="form-group">
-        <label class="form-label">Owner</label>
-        <input type="text" class="form-control qm-edit-track" id="qmEditOwner" value="${q.owner || ''}" data-orig="${q.owner || ''}" oninput="_qmTrackEdit(this)">
+        <label class="form-label">负责人</label>
+        <select class="form-control qm-edit-track" id="qmEditOwner" data-orig="${q.owner || ''}" onchange="_qmTrackEdit(this)">
+          <option value="">-- 选择负责人 --</option>
+          ${editMemberOptionsHtml}
+        </select>
       </div>
       <div class="form-group">
         <label class="form-label">优先级</label>
@@ -2075,7 +2114,7 @@ q[field] = newVal;
 update('name', name);
 update('team', document.getElementById('qmEditTeam')?.value || q.team);
 update('project', document.getElementById('qmEditProject')?.value?.trim() || '');
-update('owner', document.getElementById('qmEditOwner')?.value?.trim() || '');
+update('owner', document.getElementById('qmEditOwner')?.value || '');
 update('priority', document.getElementById('qmEditPriority')?.value || 'P3');
 update('requirement', document.getElementById('qmEditRequirement')?.value || '');
 

@@ -7,11 +7,13 @@
 // 当前表单内部状态
 let _wtFormState = {
   category: 'overtime',
+  subType: 'normal',       // 加班子类型: normal | queue_ot | urgent | holiday
   platform: 'queue',
   queueId: null,
   memberId: null,
   effStandard: 0,
   effCoef: 1,
+  useQueueEff: false,      // 是否使用队列天级人效
 };
 
 // 工时类型颜色 → CSS 变量名映射（保留供历史记录显示使用）
@@ -103,6 +105,29 @@ function renderWorktimeRegisterPage(container, defaultCategory) {
           </button>
         </div>
 
+        ${cat === 'overtime' ? `
+        <!-- 加班子类型选择 -->
+        <div class="wt-subtype-group" id="wtSubTypeGroup">
+          <label class="wt-subtype-card ${_wtFormState.subType === 'normal' ? 'selected' : ''}" onclick="wtSelectSubType('normal')">
+            <span class="wt-subtype-icon">🕐</span>
+            <span class="wt-subtype-name">普通加班</span>
+          </label>
+          <label class="wt-subtype-card wt-subtype-queue ${_wtFormState.subType === 'queue_ot' ? 'selected' : ''}" onclick="wtSelectSubType('queue_ot')">
+            <span class="wt-subtype-icon">📋</span>
+            <span class="wt-subtype-name">队列加班</span>
+            <span class="wt-subtype-tag">自动人效</span>
+          </label>
+          <label class="wt-subtype-card ${_wtFormState.subType === 'urgent' ? 'selected' : ''}" onclick="wtSelectSubType('urgent')">
+            <span class="wt-subtype-icon">⚡</span>
+            <span class="wt-subtype-name">紧急任务</span>
+          </label>
+          <label class="wt-subtype-card ${_wtFormState.subType === 'holiday' ? 'selected' : ''}" onclick="wtSelectSubType('holiday')">
+            <span class="wt-subtype-icon">📅</span>
+            <span class="wt-subtype-name">节假日</span>
+          </label>
+        </div>
+        ` : ''}
+
         <!-- Section 1: 人员信息 -->
         <div class="ot-form-section" data-section="1">
           <div class="ot-form-section-title">
@@ -172,12 +197,12 @@ function renderWorktimeRegisterPage(container, defaultCategory) {
             <label class="form-label required">关联队列</label>
             <select class="form-control" id="wtQueue" onchange="wtOnQueueChange()">
               <option value="">请选择队列</option>
-              ${teamQueues.map(q => `<option value="${q.id}" data-coef="${q.effCoef}">${q.name}（ID:${q.id}，系数 ${q.effCoef}）</option>`).join('')}
+              ${teamQueues.map(q => `<option value="${q.id}" data-coef="${q.effCoef}">${q.name}（ID:${q.id}，人效 ${q.effTarget || '—'}/天，系数 ${q.effCoef}）</option>`).join('')}
             </select>
           </div>
           <div class="wt-eff-row" id="wtEffRow">
             <div class="wt-eff-card">
-              <div class="wt-eff-label">标准人效</div>
+              <div class="wt-eff-label" id="wtEffStdLabel">标准人效</div>
               <div class="wt-eff-value" id="wtEffStandard">${_wtFormState.effStandard || '—'}<span class="wt-eff-unit">/天</span></div>
             </div>
             <div class="wt-eff-arrow">
@@ -194,31 +219,31 @@ function renderWorktimeRegisterPage(container, defaultCategory) {
           </div>
         </div>
 
-        <!-- Section 3: 时间信息 -->
+        <!-- Section 3: 时间信息（参考） -->
         <div class="ot-form-section" data-section="3">
           <div class="ot-form-section-title">
             <span class="section-num">3</span>
-            时间信息
+            时间信息 <span class="wt-section-hint">（参考，认定时长以量级折算为准）</span>
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label class="form-label required">开始时间</label>
+              <label class="form-label">开始时间</label>
               <input type="time" class="form-control" id="wtStartTime" onchange="wtCalcDuration()">
             </div>
             <div class="form-group">
-              <label class="form-label required">结束时间</label>
+              <label class="form-label">结束时间</label>
               <input type="time" class="form-control" id="wtEndTime" onchange="wtCalcDuration()">
             </div>
           </div>
           <div class="wt-duration-bar" id="wtDurationBar" style="display:none">
-            <div class="wt-dur-item">
-              <span class="wt-dur-label">实际时长</span>
-              <span class="wt-dur-value" id="wtDurActual">0h</span>
+            <div class="wt-dur-item wt-dur-item-primary">
+              <span class="wt-dur-label">认定时长 <span class="wt-dur-badge">量级折算</span></span>
+              <span class="wt-dur-value wt-dur-calc" id="wtDurCalc">—</span>
             </div>
             <div class="wt-dur-sep"></div>
             <div class="wt-dur-item">
-              <span class="wt-dur-label">量级折算</span>
-              <span class="wt-dur-value wt-dur-calc" id="wtDurCalc">—</span>
+              <span class="wt-dur-label">时间参考</span>
+              <span class="wt-dur-value" id="wtDurActual">—</span>
             </div>
             <div class="wt-dur-sep"></div>
             <div class="wt-dur-item">
@@ -545,9 +570,71 @@ function _renderWtAsideTips(cat) {
 
 function wtSwitchCategory(cat) {
   _wtFormState.category = cat;
+  _wtFormState.subType = 'normal';
+  _wtFormState.useQueueEff = false;
   // 重新渲染整个页面
   const content = document.getElementById('contentArea');
   if (content) renderWorktimeRegisterPage(content, cat);
+}
+
+// ---- 加班子类型选择 ----
+function wtSelectSubType(subType) {
+  _wtFormState.subType = subType;
+  // 更新选中状态
+  document.querySelectorAll('.wt-subtype-card').forEach(c => c.classList.remove('selected'));
+  const card = document.querySelector(`.wt-subtype-card[onclick*="${subType}"]`);
+  if (card) card.classList.add('selected');
+
+  if (subType === 'queue_ot') {
+    // 队列加班：强制切换到队列平台，使用队列天级人效
+    _wtFormState.useQueueEff = true;
+    _wtFormState.platform = 'queue';
+    // 更新平台选择UI
+    document.querySelectorAll('.wt-platform-card').forEach(c => c.classList.remove('selected'));
+    const queueCard = document.querySelector('.wt-platform-card[data-pid="queue"]');
+    if (queueCard) { queueCard.classList.add('selected'); queueCard.querySelector('input').checked = true; }
+    const queueRow = document.getElementById('wtQueueRow');
+    if (queueRow) { queueRow.style.display = ''; queueRow.classList.add('wt-queue-row-active'); }
+    // 如果已选队列，用队列人效
+    if (_wtFormState.queueId) {
+      const q = getQueueById(_wtFormState.queueId);
+      if (q && q.effTarget) {
+        _wtFormState.effStandard = q.effTarget;
+      }
+    }
+    _updateEffDisplay();
+    // 显示队列人效提示
+    _showQueueEffHint(true);
+  } else {
+    // 非队列加班：恢复个人人效
+    _wtFormState.useQueueEff = false;
+    const memberId = _wtFormState.memberId || parseInt(document.getElementById('wtMember')?.value);
+    const member = memberId ? getMemberById(memberId) : null;
+    _wtFormState.effStandard = member ? member.efficiency : 0;
+    _updateEffDisplay();
+    _showQueueEffHint(false);
+    _hideQueueAutoFill();
+    const queueRow = document.getElementById('wtQueueRow');
+    if (queueRow) queueRow.classList.remove('wt-queue-row-active');
+  }
+  wtCalcDuration();
+}
+
+function _showQueueEffHint(show) {
+  let hint = document.getElementById('wtQueueEffHint');
+  if (show) {
+    if (!hint) {
+      hint = document.createElement('div');
+      hint.id = 'wtQueueEffHint';
+      hint.className = 'wt-queue-eff-hint';
+      const effRow = document.getElementById('wtEffRow');
+      if (effRow) effRow.parentNode.insertBefore(hint, effRow.nextSibling);
+    }
+    hint.innerHTML = '<span class="wt-qeh-icon">💡</span> <b>队列加班时长计算：</b>认定时长 = 量级 ÷ 队列天级人效 × 8h<br><span style="opacity:0.7">例：队列人效1000条/天 → 填250条 = <b>2小时</b>（250 ÷ 1000 × 8）</span>';
+    hint.style.display = 'block';
+  } else {
+    if (hint) hint.style.display = 'none';
+  }
 }
 
 function wtSelectPlatform(pid) {
@@ -626,8 +713,42 @@ function wtOnQueueChange() {
   const queue = getQueueById(queueId);
   _wtFormState.queueId = queueId || null;
   _wtFormState.effCoef = queue ? queue.effCoef : 1;
+
+  // 队列加班模式：使用队列天级人效替代个人人效
+  if (_wtFormState.useQueueEff && queue) {
+    _wtFormState.effStandard = queue.effTarget || 0;
+    // 队列加班时系数固定为1（天级人效已包含系数含义）
+    _wtFormState.effCoef = 1;
+    // 显示自动填充通知
+    _showQueueAutoFill(queue);
+  } else {
+    _hideQueueAutoFill();
+  }
+
   _updateEffDisplay();
   wtCalcDuration();
+}
+
+function _showQueueAutoFill(queue) {
+  let nf = document.getElementById('wtQueueAutoFill');
+  if (!nf) {
+    nf = document.createElement('div');
+    nf.id = 'wtQueueAutoFill';
+    nf.className = 'wt-queue-autofill';
+    const queueRow = document.getElementById('wtQueueRow');
+    if (queueRow) queueRow.parentNode.insertBefore(nf, queueRow.nextSibling);
+  }
+  nf.innerHTML = `<span class="wt-af-icon">✨</span><span><b>已选择队列「${queue.name}」</b>，天级人效 <b>${queue.effTarget || '—'}</b> 条/天 系数 <b>${queue.effCoef}</b> 已自动填入</span>`;
+  nf.style.display = 'flex';
+  // 闪烁动画重触
+  nf.classList.remove('wt-af-flash');
+  void nf.offsetWidth;
+  nf.classList.add('wt-af-flash');
+}
+
+function _hideQueueAutoFill() {
+  const nf = document.getElementById('wtQueueAutoFill');
+  if (nf) nf.style.display = 'none';
 }
 
 function _refreshQueueList(team) {
@@ -635,7 +756,7 @@ function _refreshQueueList(team) {
   if (!queueSel) return;
   const queues = getQueuesByTeam(team).filter(q => q.status === 'active');
   queueSel.innerHTML = '<option value="">请选择队列</option>' +
-    queues.map(q => `<option value="${q.id}" data-coef="${q.effCoef}">${q.name}（ID:${q.id}，系数 ${q.effCoef}）</option>`).join('');
+    queues.map(q => `<option value="${q.id}" data-coef="${q.effCoef}">${q.name}（ID:${q.id}，人效 ${q.effTarget || '—'}/天，系数 ${q.effCoef}）</option>`).join('');
   _wtFormState.queueId = null;
   _wtFormState.effCoef = 1;
 }
@@ -648,6 +769,12 @@ function _updateEffDisplay() {
   const elStd = document.getElementById('wtEffStandard');
   const elCorr = document.getElementById('wtEffCorrected');
   const elCoef = document.getElementById('wtCoefTag');
+  const elStdLabel = document.getElementById('wtEffStdLabel');
+
+  // 队列加班模式下标签不同
+  if (elStdLabel) {
+    elStdLabel.textContent = _wtFormState.useQueueEff ? '队列天级人效' : '标准人效';
+  }
 
   if (elStd) elStd.innerHTML = `${std || '—'}<span class="wt-eff-unit">/天</span>`;
   if (elCorr) elCorr.innerHTML = `${corrected || '—'}<span class="wt-eff-unit">/天</span>`;
@@ -664,37 +791,62 @@ function wtCalcDuration() {
   const durDiff = document.getElementById('wtDurDiff');
   const validation = document.getElementById('wtTimeValidation');
 
-  if (!start || !end) { if (bar) bar.style.display = 'none'; return; }
-
-  const dur = calcHourDiff(start, end);
-  if (dur <= 0) {
-    if (validation) validation.innerHTML = '<div class="validation-error">⚠️ 结束时间必须晚于开始时间</div>';
-    if (bar) bar.style.display = 'none';
-    return;
-  }
-  if (validation) validation.innerHTML = '';
-  if (bar) bar.style.display = 'flex';
-  if (durActual) durActual.textContent = dur.toFixed(1) + 'h';
-
-  // 量级折算
+  // 量级折算（核心认定时长）
   const eff = _wtFormState.effStandard * _wtFormState.effCoef;
+  let calcH = 0;
   if (volume > 0 && eff > 0) {
-    const calcH = (volume / eff * 8);
-    if (durCalc) durCalc.textContent = calcH.toFixed(1) + 'h';
-    const diff = dur - calcH;
+    calcH = (volume / eff * 8);
+  }
+
+  // 时间差（仅作参考）
+  let timeDur = 0;
+  if (start && end) {
+    timeDur = calcHourDiff(start, end);
+    if (timeDur <= 0) {
+      if (validation) validation.innerHTML = '<div class="validation-error">⚠️ 结束时间必须晚于开始时间</div>';
+    }
+  }
+
+  // 只要有量级就显示时长条
+  const showBar = (volume > 0 && eff > 0) || (start && end && timeDur > 0);
+  if (bar) bar.style.display = showBar ? 'flex' : 'none';
+  if (!showBar) return;
+
+  // 认定时长 = 量级折算（主）
+  if (volume > 0 && eff > 0) {
+    if (durCalc) {
+      durCalc.textContent = calcH.toFixed(1) + 'h';
+      durCalc.className = 'wt-dur-value wt-dur-calc wt-dur-primary';
+    }
+  } else {
+    if (durCalc) { durCalc.textContent = '—'; durCalc.className = 'wt-dur-value wt-dur-calc'; }
+  }
+
+  // 时间参考
+  if (start && end && timeDur > 0) {
+    if (durActual) durActual.textContent = timeDur.toFixed(1) + 'h';
+  } else {
+    if (durActual) durActual.textContent = '—';
+  }
+
+  // 差异
+  if (volume > 0 && eff > 0 && start && end && timeDur > 0) {
+    const diff = timeDur - calcH;
     if (durDiff) {
       durDiff.textContent = (diff >= 0 ? '+' : '') + diff.toFixed(1) + 'h';
       durDiff.className = 'wt-dur-value ' + (Math.abs(diff) > 1 ? 'wt-dur-warn' : 'wt-dur-ok');
     }
   } else {
-    if (durCalc) durCalc.textContent = '—';
     if (durDiff) { durDiff.textContent = '—'; durDiff.className = 'wt-dur-value'; }
   }
 
-  // 时段校验提示
+  // 清除旧校验
+  if (validation) validation.innerHTML = '';
+
+  // 时段校验提示（仅参考性质）
   const memberId = _wtFormState.memberId || parseInt(document.getElementById('wtMember')?.value);
   const dateVal = document.getElementById('wtDate')?.value;
-  if (memberId && dateVal) {
+  if (memberId && dateVal && start && end && timeDur > 0) {
     const day = new Date(dateVal).getDate();
     const cat = _wtFormState.category;
     if (cat === 'overtime') {
@@ -791,7 +943,7 @@ function wtSubmitForm() {
 
   if (!memberId) { showToast('请选择人员', 'warning'); return; }
   if (!date) { showToast('请选择日期', 'warning'); return; }
-  if (!start || !end) { showToast('请填写时间信息', 'warning'); return; }
+  if (!volume || volume <= 0) { showToast('请填写审核量级', 'warning'); return; }
 
   const plat = WORK_PLATFORMS.find(p => p.id === platform);
   if (plat && plat.hasQueue && !_wtFormState.queueId) {
@@ -802,8 +954,20 @@ function wtSubmitForm() {
   if (!member) { showToast('人员数据异常', 'error'); return; }
 
   const day = new Date(date).getDate();
-  const dur = calcHourDiff(start, end);
-  if (dur <= 0) { showToast('结束时间必须晚于开始时间', 'warning'); return; }
+  const timeDur = (start && end) ? calcHourDiff(start, end) : 0;
+
+  // ===== 核心：以量级折算为认定时长 =====
+  const queue = _wtFormState.queueId ? getQueueById(_wtFormState.queueId) : null;
+  const correctedEff = Math.round((_wtFormState.effStandard || member.efficiency) * _wtFormState.effCoef);
+  let dur = 0;
+  if (volume > 0 && correctedEff > 0) {
+    // 量级折算：认定时长 = (量级 / 天级人效) × 8小时
+    dur = parseFloat((volume / correctedEff * 8).toFixed(1));
+  } else if (timeDur > 0) {
+    // 无量级时回退到时间差
+    dur = timeDur;
+  }
+  if (dur <= 0) { showToast('请填写量级或有效的时间段', 'warning'); return; }
 
   // ===== 4.5 时间窗口约束 =====
   const submitDate = new Date(date);
@@ -824,14 +988,16 @@ function wtSubmitForm() {
     }
   }
 
-  // 时段校验
-  if (cat === 'overtime') {
-    if (!isNonWorkingTime(memberId, day, start, end)) {
-      showToast('加班时段与工作时段重叠，请检查时间', 'warning'); return;
-    }
-  } else {
-    if (!isWorkingTime(memberId, day, start, end)) {
-      showToast('工损时段不在工作时段内，请检查时间', 'warning'); return;
+  // 时段校验（参考性质，不阻断提交）
+  if (start && end && timeDur > 0) {
+    if (cat === 'overtime') {
+      if (!isNonWorkingTime(memberId, day, start, end)) {
+        showToast('提示：加班时段与工作时段有重叠，已记录供参考', 'info');
+      }
+    } else {
+      if (!isWorkingTime(memberId, day, start, end)) {
+        showToast('提示：工损时段不在工作时段内，已记录供参考', 'info');
+      }
     }
   }
 
@@ -840,17 +1006,21 @@ function wtSubmitForm() {
     showToast(`单次${cat === 'overtime' ? '加班' : '工损'}超过3小时，已通知负责人`, 'warning');
   }
 
-  const queue = _wtFormState.queueId ? getQueueById(_wtFormState.queueId) : null;
-  const correctedEff = Math.round((_wtFormState.effStandard || member.efficiency) * _wtFormState.effCoef);
-
+  const subTypeNames = { normal: '普通加班', queue_ot: '队列加班', urgent: '紧急任务加班', holiday: '节假日加班' };
   const newRecord = {
     id: 'ot_' + Date.now(),
     type: cat,
+    subType: _wtFormState.subType,
+    subTypeName: subTypeNames[_wtFormState.subType] || '普通加班',
     platform: platform,
     memberId, memberName: member.name, team: member.team,
-    date, startTime: start, endTime: end, duration: dur,
+    date, startTime: start || '', endTime: end || '',
+    duration: dur,           // 认定时长（量级折算）
+    timeDuration: timeDur > 0 ? parseFloat(timeDur.toFixed(1)) : null,  // 时间参考时长
     queueId: queue?.id || null, queueName: queue?.name || (platform === 'label' ? '标注' : platform === 'offline' ? '离线' : ''),
-    volume, efficiency: member.efficiency, effCoef: _wtFormState.effCoef, correctedEff,
+    volume, efficiency: _wtFormState.useQueueEff ? correctedEff : member.efficiency,
+    effCoef: _wtFormState.effCoef, correctedEff,
+    useQueueEff: _wtFormState.useQueueEff,
     project: remark,
     status: 'pending',
     submittedAt: formatDate(new Date(), 'YYYY-MM-DD HH:mm'),
@@ -1517,7 +1687,9 @@ function _renderReportTab(box) {
                 const injRecs = OVERTIME_RECORDS.filter(r => r.memberId === m.id && r.type === 'injury' && r.status === 'approved');
                 const otHours = otRecs.reduce((s, r) => s + r.duration, 0);
                 const injHours = injRecs.reduce((s, r) => s + r.duration, 0);
-                const workDays = ATTENDANCE_STATS[m.id]?.workDays || 20;
+                const _now = new Date();
+                const _attS = typeof _getAttStats === 'function' ? _getAttStats(m.id, String(_now.getFullYear()), String(_now.getMonth()+1).padStart(2,'0')) : null;
+                const workDays = (_attS && _attS.hasRealData) ? _attS.workDays : (ATTENDANCE_STATS[m.id]?.workDays || 20);
                 const otPct = ((otHours / (workDays * 8)) * 100).toFixed(1);
                 return `<tr>
                   <td style="cursor:pointer" onclick="showPersonDetail(${m.id})">

@@ -512,6 +512,22 @@
   letter-spacing: -0.3px;
 }
 .wt-dur-calc { color: var(--text-secondary); }
+.wt-dur-calc.wt-dur-primary { color: var(--primary); font-size: 20px; }
+.wt-dur-item-primary {
+  background: rgba(var(--primary-rgb, 0,122,255), 0.04);
+  position: relative;
+}
+.wt-dur-item-primary::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0;
+  height: 2px; background: var(--primary); border-radius: 2px 2px 0 0;
+}
+.wt-dur-badge {
+  display: inline-block; font-size: 9px; font-weight: 600;
+  background: var(--primary); color: #fff;
+  padding: 1px 5px; border-radius: 3px;
+  margin-left: 4px; vertical-align: middle;
+  letter-spacing: 0.3px;
+}
 .wt-dur-sep {
   width: 0.5px; background: var(--border-light);
   flex-shrink: 0; align-self: stretch;
@@ -519,6 +535,97 @@
 }
 .wt-dur-warn { color: var(--danger) !important; }
 .wt-dur-ok   { color: var(--success) !important; }
+.wt-section-hint {
+  font-size: 12px; font-weight: 400; color: var(--text-quaternary);
+  margin-left: 4px;
+}
+
+/* ---- 加班子类型选择器 ---- */
+.wt-subtype-group {
+  display: flex; gap: 8px; margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.wt-subtype-card {
+  flex: 1; min-width: 100px;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 10px 8px; border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border-light);
+  background: var(--card); cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+.wt-subtype-card:hover {
+  border-color: var(--primary-light, #b3d4fc);
+  background: var(--bg-tertiary);
+}
+.wt-subtype-card.selected {
+  border-color: var(--primary);
+  background: rgba(var(--primary-rgb, 0,122,255), 0.04);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+.wt-subtype-icon { font-size: 18px; line-height: 1; }
+.wt-subtype-name {
+  font-size: 12px; font-weight: 600; color: var(--text-primary);
+  white-space: nowrap;
+}
+.wt-subtype-tag {
+  position: absolute; top: -6px; right: -4px;
+  font-size: 9px; font-weight: 700;
+  background: var(--success); color: #fff;
+  padding: 1px 5px; border-radius: 3px;
+  letter-spacing: 0.3px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+}
+.wt-subtype-queue.selected .wt-subtype-tag {
+  background: var(--primary);
+}
+
+/* ---- 队列人效提示 ---- */
+.wt-queue-eff-hint {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 12px; margin-top: 8px;
+  background: rgba(var(--primary-rgb, 0,122,255), 0.04);
+  border: 1px solid rgba(var(--primary-rgb, 0,122,255), 0.12);
+  border-radius: var(--radius-sm);
+  font-size: 12px; color: var(--primary);
+  line-height: 1.5;
+}
+.wt-qeh-icon { font-size: 14px; flex-shrink: 0; }
+
+/* ---- 队列行高亮（队列加班选中时） ---- */
+#wtQueueRow.wt-queue-row-active {
+  background: rgba(20,86,240,0.05);
+  border-radius: var(--radius-md);
+  border-left: 3px solid var(--primary);
+  padding-left: 10px;
+  margin-left: -4px;
+  transition: all 0.25s ease;
+}
+
+/* ---- 队列Auto-fill自动填充通知 ---- */
+.wt-queue-autofill {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px; margin-top: 6px;
+  background: linear-gradient(135deg, rgba(34,197,94,0.08), rgba(20,86,240,0.05));
+  border: 1px solid rgba(34,197,94,0.25);
+  border-radius: var(--radius-sm);
+  font-size: 12px; color: var(--text-primary);
+  line-height: 1.5;
+  animation: wt-af-in 0.35s cubic-bezier(0.34,1.56,0.64,1);
+}
+.wt-af-icon { font-size: 16px; flex-shrink: 0; }
+.wt-af-flash {
+  animation: wt-af-pulse 0.5s ease-out;
+}
+@keyframes wt-af-in {
+  from { opacity: 0; transform: translateY(-6px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes wt-af-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(34,197,94,0.4); }
+  70%  { box-shadow: 0 0 0 8px rgba(34,197,94,0); }
+  100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
+}
 
 /* ---- 提交行 ---- */
 .wt-submit-row {
