@@ -1,32 +1,32 @@
 [
   {
-    "id": "mozbxig5u7qrtbls",
+    "id": "mozc9g25pk5zlrp9",
     "name": "队列加班",
     "color": "#1890ff",
     "defaultEfficiency": 1000,
     "description": "队列相关加班工作",
     "isActive": true,
     "sortOrder": 1,
-    "createdAt": "2026-05-10T05:25:41.669Z"
+    "createdAt": "2026-05-10T05:34:58.445Z"
   },
   {
-    "id": "mozbxig6e2ad95rv",
+    "id": "mozc9g25oq9n5tuj",
     "name": "标注加班",
     "color": "#52c41a",
     "defaultEfficiency": 800,
     "description": "标注相关加班工作",
     "isActive": true,
     "sortOrder": 2,
-    "createdAt": "2026-05-10T05:25:41.670Z"
+    "createdAt": "2026-05-10T05:34:58.445Z"
   },
   {
-    "id": "mozbxig6cz4kss2l",
+    "id": "mozc9g25cn99bctp",
     "name": "其他加班",
     "color": "#faad14",
     "defaultEfficiency": 500,
     "description": "其他类型加班",
     "isActive": true,
     "sortOrder": 3,
-    "createdAt": "2026-05-10T05:25:41.670Z"
+    "createdAt": "2026-05-10T05:34:58.445Z"
   }
 ]
