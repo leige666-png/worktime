@@ -1,72 +1,72 @@
 [
   {
-    "id": "moz9hji1t4pu7aoh",
+    "id": "mozc9hicbb46tnaz",
     "name": "申述类",
     "color": "#ff4d4f",
     "defaultEfficiency": 200,
     "description": "申述相关工损",
     "isActive": true,
     "sortOrder": 1,
-    "createdAt": "2026-05-10T04:17:17.305Z"
+    "createdAt": "2026-05-10T05:35:00.324Z"
   },
   {
-    "id": "moz9hji1xdxhnbnp",
+    "id": "mozc9hic7cg4edad",
     "name": "试标类",
     "color": "#fa8c16",
     "defaultEfficiency": 300,
     "description": "试标相关工损",
     "isActive": true,
     "sortOrder": 2,
-    "createdAt": "2026-05-10T04:17:17.305Z"
+    "createdAt": "2026-05-10T05:35:00.324Z"
   },
   {
-    "id": "moz9hji1ej5y17zf",
+    "id": "mozc9hic2cagi1jr",
     "name": "客诉类",
     "color": "#eb2f96",
     "defaultEfficiency": 150,
     "description": "客诉相关工损",
     "isActive": true,
     "sortOrder": 3,
-    "createdAt": "2026-05-10T04:17:17.305Z"
+    "createdAt": "2026-05-10T05:35:00.324Z"
   },
   {
-    "id": "moz9hji1kkpw3ihu",
+    "id": "mozc9hic6zj4oqjq",
     "name": "巡检类",
     "color": "#722ed1",
     "defaultEfficiency": 250,
     "description": "巡检相关工损",
     "isActive": true,
     "sortOrder": 4,
-    "createdAt": "2026-05-10T04:17:17.305Z"
+    "createdAt": "2026-05-10T05:35:00.324Z"
   },
   {
-    "id": "moz9hji1khll8wkd",
+    "id": "mozc9hicb579j8a8",
     "name": "培训类",
     "color": "#13c2c2",
     "defaultEfficiency": 400,
     "description": "培训相关工损",
     "isActive": true,
     "sortOrder": 5,
-    "createdAt": "2026-05-10T04:17:17.305Z"
+    "createdAt": "2026-05-10T05:35:00.324Z"
   },
   {
-    "id": "moz9hji1mj3w2dk0",
+    "id": "mozc9hicrlxx7wlg",
     "name": "会议类",
     "color": "#2f54eb",
     "defaultEfficiency": 0,
     "description": "会议相关工损",
     "isActive": true,
     "sortOrder": 6,
-    "createdAt": "2026-05-10T04:17:17.305Z"
+    "createdAt": "2026-05-10T05:35:00.324Z"
   },
   {
-    "id": "moz9hji1smn8dj96",
+    "id": "mozc9hic6tw0dbkj",
     "name": "其他类",
     "color": "#8c8c8c",
     "defaultEfficiency": 200,
     "description": "其他类型工损",
     "isActive": true,
     "sortOrder": 7,
-    "createdAt": "2026-05-10T04:17:17.305Z"
+    "createdAt": "2026-05-10T05:35:00.324Z"
   }
 ]
