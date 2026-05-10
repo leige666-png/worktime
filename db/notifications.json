@@ -638,5 +638,15 @@
     "relatedId": "moz8n32njh396mcu",
     "isRead": false,
     "createdAt": "2026-05-10T03:53:36.337Z"
+  },
+  {
+    "id": "moz8og1k0ocyxew0",
+    "userId": "moy828yotn06fno5",
+    "title": "✅ 加班申请已通过",
+    "content": "您 2026-05-11 的加班申请（其他加班：很过分合格）已通过审批。",
+    "type": "record_approved",
+    "relatedId": "moz8n32njh396mcu",
+    "isRead": false,
+    "createdAt": "2026-05-10T03:54:39.800Z"
   }
 ]
