@@ -548,5 +548,45 @@
     "relatedId": "moy853efgte6my4v",
     "isRead": false,
     "createdAt": "2026-05-10T03:34:16.281Z"
+  },
+  {
+    "id": "moz7ycso1hnaziwj",
+    "userId": "moy844mwg0vh3uhk",
+    "title": "✅ 加班申请已通过",
+    "content": "您 2026-05-01 的加班申请（队列加班：12312）已通过审批。",
+    "type": "record_approved",
+    "relatedId": "moy853ane518gzkq",
+    "isRead": false,
+    "createdAt": "2026-05-10T03:34:22.536Z"
+  },
+  {
+    "id": "moz7ydhs1vwdfb5j",
+    "userId": "moy844mwg0vh3uhk",
+    "title": "✅ 加班申请已通过",
+    "content": "您 2026-05-01 的加班申请（队列加班：12312）已通过审批。",
+    "type": "record_approved",
+    "relatedId": "moy852ygtp4tjoqo",
+    "isRead": false,
+    "createdAt": "2026-05-10T03:34:23.440Z"
+  },
+  {
+    "id": "moz7ydnd4xd6oq6y",
+    "userId": "moy844mwg0vh3uhk",
+    "title": "✅ 加班申请已通过",
+    "content": "您 2026-05-01 的加班申请（队列加班：12312）已通过审批。",
+    "type": "record_approved",
+    "relatedId": "moy852ub959uutur",
+    "isRead": false,
+    "createdAt": "2026-05-10T03:34:23.641Z"
+  },
+  {
+    "id": "moz7ydskf0gsaoni",
+    "userId": "moy844mwg0vh3uhk",
+    "title": "✅ 加班申请已通过",
+    "content": "您 2026-05-01 的加班申请（队列加班：12312）已通过审批。",
+    "type": "record_approved",
+    "relatedId": "moy852qrhszy5ckz",
+    "isRead": false,
+    "createdAt": "2026-05-10T03:34:23.828Z"
   }
 ]
