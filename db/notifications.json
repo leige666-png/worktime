@@ -646,7 +646,7 @@
     "content": "您 2026-05-11 的加班申请（其他加班：很过分合格）已通过审批。",
     "type": "record_approved",
     "relatedId": "moz8n32njh396mcu",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-05-10T03:54:39.800Z"
   }
 ]
