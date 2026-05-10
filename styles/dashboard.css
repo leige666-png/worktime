@@ -108,6 +108,42 @@
 .time-range-btn:hover  { border-color: var(--primary); color: var(--primary); }
 .time-range-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
 
+/* KPI 进度条 */
+.kpi-progress {
+  height: 4px; background: var(--border-light); border-radius: 2px;
+  margin: 10px 0 6px; overflow: hidden;
+}
+.kpi-progress-fill {
+  height: 100%; border-radius: 2px;
+  transition: width 0.6s ease;
+}
+
+/* KPI L型色带增强 */
+.kpi-card::after {
+  content: ''; position: absolute; left: 0; bottom: 0; width: 40%; height: 4px;
+  background: inherit; border-radius: 0 2px 0 0; opacity: 0.5;
+}
+.kpi-card::after { background: var(--primary); }
+.kpi-card.green::after  { background: #00B42A; }
+.kpi-card.orange::after { background: #FF7D00; }
+.kpi-card.red::after    { background: #F53F3F; }
+
+/* 可折叠外部链接面板 */
+.ext-links-panel { margin-bottom: 16px; }
+.ext-links-toggle {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 16px; width: 100%;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); cursor: pointer;
+  font-size: 13px; font-weight: 500; color: var(--text-secondary);
+  transition: all var(--transition); font-family: inherit;
+}
+.ext-links-toggle:hover { border-color: var(--primary); color: var(--primary); }
+.ext-links-chevron { margin-left: auto; transition: transform 0.2s ease; }
+.ext-links-panel.open .ext-links-chevron { transform: rotate(180deg); }
+.ext-links-body { padding-top: 10px; }
+.ext-links-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+
 /* 外部链接卡片 */
 .external-link-card {
   display: flex; align-items: center; gap: 12px; padding: 14px 18px;

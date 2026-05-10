@@ -65,27 +65,15 @@ function _buildCardData(today, daysInMonth, anomalies) {
         });
       }).length;
     }
-    // r98: 统计当日/当月各班次人数分布
+    // 统计当天各班次人数（当前月用今天，非当前月用1号）
     var shiftDist = { A: 0, B: 0, C: 0 };
-    if (isCurrentMonth) {
-      members.forEach(function(m) {
-        var sv = getMemberShift(m.id, today.getDate());
-        if (sv && SHIFTS[sv] && sv !== 'OFF' && !isLeaveShift(sv)) {
-          if (shiftDist.hasOwnProperty(sv)) shiftDist[sv]++;
-        }
-      });
-    } else {
-      // 非当月：统计本月每天每人最常见班次（简化：取每人第一个出现的有效班次）
-      members.forEach(function(m) {
-        for (var d = 1; d <= daysInMonth; d++) {
-          var sv = getMemberShift(m.id, d);
-          if (sv && SHIFTS[sv] && sv !== 'OFF' && !isLeaveShift(sv)) {
-            if (shiftDist.hasOwnProperty(sv)) shiftDist[sv]++;
-            break;
-          }
-        }
-      });
-    }
+    var _statDay = isCurrentMonth ? today.getDate() : 1;
+    members.forEach(function(m) {
+      var sv = getMemberShift(m.id, _statDay);
+      if (sv && SHIFTS[sv] && sv !== 'OFF' && !isLeaveShift(sv)) {
+        if (shiftDist.hasOwnProperty(sv)) shiftDist[sv]++;
+      }
+    });
     return { team: team, total: total, onduty: onduty, shiftDist: shiftDist };
   });
   var _totalOnduty = _teamOndutyStats.reduce(function(s, t) { return s + t.onduty; }, 0);

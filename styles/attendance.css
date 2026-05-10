@@ -1557,7 +1557,7 @@ td:hover .avatar-chat-btn { opacity: 1; }
   border-bottom: none !important;
 }
 .schedule-weekday-td {
-  font-size: 10.5px;
+  font-size: 15px;
   color: #000 !important;
   padding: 1px 0 !important;
 }
@@ -8595,7 +8595,7 @@ background: rgba(0,0,0,0.04); cursor: pointer;
   gap: 2px;
 }
 .schedule-stat-label-total {
-  font-size: 22px;
+  font-size: 15px;
   font-weight: 700;
   color: #000;
   display: inline-flex;
@@ -8607,7 +8607,7 @@ background: rgba(0,0,0,0.04); cursor: pointer;
 .schedule-stat-shift-icon {
   width: 29px !important;
   height: 29px !important;
-  border-radius: 6px !important;
+  border-radius: 0 !important;
   font-size: 15px !important;
   font-weight: 700 !important;
   display: inline-flex !important;
@@ -8647,7 +8647,16 @@ background: rgba(0,0,0,0.04); cursor: pointer;
   box-shadow: none !important;
 }
 
-/* r78: 折叠按钮 — 合计行标签旁的小箭头 */
+/* 合计行标签 + 折叠按钮 flex 容器 */
+.sch-total-label-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 4px;
+}
+
+/* r78: 折叠按钮 — 合计行右侧三角形 */
 .sch-fold-btn {
   display: inline-flex;
   align-items: center;

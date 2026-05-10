@@ -79,7 +79,8 @@ function showPersonDetail(memberId) {
   const day = today.getDate();
   const shift = getMemberShift(memberId, day);
   const shiftInfo = getShiftDisplayInfo(shift);
-  const stats = ATTENDANCE_STATS[memberId] || {};
+  const _yearStr = String(today.getFullYear()), _monthStr = String(today.getMonth()+1).padStart(2,'0');
+  const stats = typeof _getAttStats === 'function' ? _getAttStats(memberId, _yearStr, _monthStr) : (ATTENDANCE_STATS[memberId] || {});
   const otRecords = OVERTIME_RECORDS.filter(r => r.memberId === memberId).slice(0, 5);
   const effLevel = getEfficiencyLevel(member.efficiency);
   const effLabel = getEfficiencyLabel(member.efficiency);

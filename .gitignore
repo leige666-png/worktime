@@ -30,3 +30,24 @@ el.textContent.trim()
 
 # 旧版备份
 reports_r121_restored_20260423.js
+
+# Node.js
+node_modules/
+
+# 数据库（运行时生成）
+glxt.db
+glxt.db-shm
+glxt.db-wal
+
+# 自动备份
+backups/
+
+# HTTPS 证书
+certs/
+
+# PM2 日志
+logs/
+
+# SSH
+*.ssh*
+CUsers*

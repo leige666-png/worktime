@@ -1,4 +1,16 @@
 // 人员管理模块（r134: 3级角色体系，用 isManagerRole() 替代散落的 includes 判断）
+
+// 判断当前用户是否有管理权限（管理员及以上）
+function canEditAvatar() {
+  return isManagerRole();
+}
+
+// 判断当前用户是否有管理权限（管理员及以上）-- 重构为通用方法
+function canManageMember(memberId) {
+  return isManagerRole() || CURRENT_USER.mis === getMemberById(memberId)?.mis;
+}
+
+// 渲染人员管理页面
 function renderMembersPage(container) {
   const canManage = isManagerRole();
   const teamNames = getTeamNames();
@@ -53,12 +65,13 @@ function renderMemberCards(members) {
     const todayShift = getMemberShift(m.id, new Date().getDate());
     const shiftInfo = SHIFTS[todayShift] || SHIFTS.OFF;
     const canEdit = canEditAvatar();
+    const canSeeCreds = canManageMember(m.id); // 管理员或本人可看账号密码
     const avatarUrl = getAvatarUrl(m);
     const tColor = getTeamColor(m.team);
     return `
       <div class="member-card" onclick="showPersonDetail(${m.id})">
         <div class="member-card-header">
-          <!-- 头像区：管理员+可点击编辑 -->
+          <!-- 头像区 -->
           <div class="member-avatar-wrap" style="position:relative;flex-shrink:0">
             <img src="${avatarUrl}" alt="${m.name}"
               style="width:40px;height:40px;border-radius:50%;object-fit:cover;display:block;cursor:${canEdit ? 'pointer' : 'default'}"
@@ -80,14 +93,35 @@ function renderMemberCards(members) {
               <span class="tag tag-gray" style="font-size:10px">${ROLES[m.role] || m.role}</span>
             </div>
           </div>
-          <div style="text-align:right">
-            <div class="shift-cell ${shiftInfo.color}" style="display:inline-flex;padding:2px 8px;border-radius:4px;font-size:11px;margin-bottom:4px">${shiftInfo.name}</div>
-            ${!m.excludeFromSchedule ? `<div><span class="efficiency-badge eff-${effLevel}">${getEfficiencyLabel(m.efficiency)}</span></div>` : ''}
-            ${canManage ? `<div style="margin-top:4px;display:flex;gap:4px;justify-content:flex-end"><button class="btn btn-ghost" style="font-size:10px;padding:1px 6px;min-height:0" onclick="event.stopPropagation();showEditMember(${m.id})" title="编辑人员">编辑</button></div>` : ''}
+          <div style="display:flex;align-items:flex-start;gap:6px">
+            <div style="text-align:right">
+              <div class="shift-cell ${shiftInfo.color}" style="display:inline-flex;padding:2px 8px;border-radius:4px;font-size:11px;margin-bottom:4px">${shiftInfo.name}</div>
+              ${!m.excludeFromSchedule ? `<div><span class="efficiency-badge eff-${effLevel}">${getEfficiencyLabel(m.efficiency)}</span></div>` : ''}
+            </div>
+            ${canManage ? `<div class="member-more-wrap" style="position:relative">
+              <button class="btn btn-ghost member-more-btn" style="padding:2px 4px;min-height:0;line-height:1" onclick="event.stopPropagation();_toggleMemberMenu(${m.id},event)" title="更多操作">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+              </button>
+              <div class="member-action-menu" id="memberMenu_${m.id}" style="display:none;position:absolute;right:0;top:100%;z-index:100;min-width:120px;background:#fff;border:1px solid var(--border-light);border-radius:var(--radius-md);box-shadow:var(--shadow-lg);padding:4px 0">
+                <div class="member-menu-item" onclick="event.stopPropagation();showEditMember(${m.id});_closeMemberMenus()">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  编辑信息
+                </div>
+                <div class="member-menu-item" onclick="event.stopPropagation();showAvatarEditor(${m.id});_closeMemberMenus()">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662"/></svg>
+                  修改头像
+                </div>
+                <div class="member-menu-item" onclick="event.stopPropagation();navigator.clipboard.writeText('${m.mis}');showToast('已复制 ${m.mis}','success');_closeMemberMenus()">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  复制MIS号
+                </div>
+              </div>
+            </div>` : ''}
           </div>
         </div>
-        ${!m.excludeFromSchedule ? `
+        <!-- 统一高度的数据区 -->
         <div class="member-stats">
+          ${!m.excludeFromSchedule ? `
           <div class="member-stat">
             <div class="member-stat-val" style="color:var(--primary)">${m.efficiency}</div>
             <div class="member-stat-label">人效/天</div>
@@ -100,11 +134,84 @@ function renderMemberCards(members) {
             <div class="member-stat-val">${ATTENDANCE_STATS[m.id]?.workDays || 0}</div>
             <div class="member-stat-label">出勤天</div>
           </div>
-        </div>` : `<div style="text-align:center;padding:8px 0;color:var(--text-tertiary);font-size:12px">${m.mis === AUTH_PERMANENT_OWNER ? '永久管理员 · 全权限' : '不参与排班'}</div>`}
+          ` : `
+          <div class="member-stat" style="grid-column:1/-1;text-align:center">
+            <div class="member-stat-val" style="color:var(--text-tertiary);font-size:13px">${m.mis === AUTH_PERMANENT_OWNER ? '永久管理员 · 全权限' : '不参与排班'}</div>
+          </div>
+          `}
+        </div>
+        <!-- 账号密码区域（仅管理员和本人可见） -->
+        ${canSeeCreds ? `
+        <div class="member-credentials">
+          <div class="cred-row">
+            <div class="cred-field">
+              <div class="cred-label">大象ID</div>
+              ${canEdit ? `
+                <div class="cred-value-wrap">
+                  <input type="text" class="cred-input" id="cred_dx_${m.id}" value="${m.daxiangId || ''}" placeholder="未绑定">
+                  <button class="cred-save-btn" onclick="_saveMemberCred('daxiangId', ${m.id})" title="保存">
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5.5L4 7.5L8 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </button>
+                </div>
+              ` : `
+                <div class="cred-value">${m.daxiangId || '<span style="color:var(--text-quaternary)">未绑定</span>'}</div>
+              `}
+            </div>
+            <div class="cred-field">
+              <div class="cred-label">登录账号</div>
+              <div class="cred-value">${m.mis}</div>
+            </div>
+          </div>
+        </div>` : ''}
       </div>
     `;
   }).join('');
 }
+
+// 保存成员的账号信息（inline editing）
+function _saveMemberCred(field, memberId) {
+  const m = getMemberById(memberId);
+  if (!m) return;
+  if (field === 'daxiangId') {
+    const input = document.getElementById('cred_dx_' + memberId);
+    if (!input) return;
+    const val = input.value.trim();
+    const oldVal = m.daxiangId || '';
+    if (val === oldVal) return;
+    m.daxiangId = val;
+    if (val && m.avatar && m.avatar.includes('neixin.cn')) {
+      m.avatar = `https://api.neixin.cn/xs/api/profile/image_${val}/${val}?t=THUMB_PROFILE`;
+    }
+    saveMembersData();
+    addWorkLog('人员管理', '修改大象ID', `${m.name}的大象ID: ${oldVal || '(空)'} → ${val || '(空)'}`);
+    showToast('大象ID已更新', 'success');
+    // 更新卡片显示
+    const card = input.closest('.member-card');
+    if (card) {
+      const credWrap = card.querySelector('.member-credentials');
+      if (credWrap) {
+        const newCreds = document.createElement('div');
+        newCreds.innerHTML = renderMemberCards([m]).match(/<div class="member-credentials">[\s\S]*?<\/div>\s*<\/div>\s*<div class="member-card"/)?.[0] || '';
+        // 直接刷新整页更省心
+        renderMembersPage(document.getElementById('contentArea'));
+      }
+    }
+  }
+}
+
+// 更多操作菜单控制
+function _toggleMemberMenu(memberId, e) {
+  const menu = document.getElementById('memberMenu_' + memberId);
+  if (!menu) return;
+  const isVisible = menu.style.display !== 'none';
+  _closeMemberMenus();
+  if (!isVisible) menu.style.display = 'block';
+}
+function _closeMemberMenus() {
+  document.querySelectorAll('.member-action-menu').forEach(m => m.style.display = 'none');
+}
+// 点击外部关闭菜单
+document.addEventListener('click', function() { _closeMemberMenus(); });
 
 function filterMembers() {
   const team = document.getElementById('memberTeamFilter')?.value || 'all';

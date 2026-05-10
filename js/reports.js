@@ -368,11 +368,9 @@ function _doUndoLog(id) {
   // 恢复快照数据到SCHEDULE_DATA
   const snap = log.snapshot;
   if (snap.year && snap.month && snap.data) {
-    // 找到对应月份的排班数据并恢复
-
-    const key = `glxt_schedule_${snap.year}_${snap.month}`;
+    // 找到对应月份的排班数据并恢复（通过统一存储层同步到服务端）
     try {
-      localStorage.setItem(key, JSON.stringify(snap.data));
+      _storageSet(`glxt_schedule_${snap.year}_${snap.month}`, snap.data, true);
       // 如果当前视图就是该月，同步更新内存中的SCHEDULE_DATA
       if (typeof scheduleYear !== 'undefined' && scheduleYear === snap.year &&
           typeof scheduleMonth !== 'undefined' && scheduleMonth === snap.month) {
@@ -493,7 +491,7 @@ function renderSettingsBasic() {
       <div class="card-body">
         <div class="form-group">
           <label class="form-label">系统名称</label>
-          <input type="text" class="form-control" value="审核管理系统">
+          <input type="text" class="form-control" value="工时管理系统">
         </div>
         <div class="form-group">
           <label class="form-label">工作日设置</label>
@@ -1139,11 +1137,11 @@ const _ATT_NOTIFY_TPL_KEY = 'att_notify_templates';
 const _ATT_NOTIFY_TPL_DEFAULTS = {
   dx_confirm: {
     label: '大象-考勤确认', channel: 'daxiang', type: 'confirm',
-    text: '📋 **{month}月考勤数据确认通知**\n\n{name} 你好，你的 **{month}月** 考勤数据已生成：\n\n{card}\n\n✅ 数据无误 → 请登录系统点击「确认无误」\n❌ 数据有误 → 请于 **下月3日前** 点击「有异议」并填写原因\n\n⏰ 逾期未确认将按当前数据结算\n\n👉 打开审核管理系统：file:///M:/GLXT/index.html'
+    text: '📋 **{month}月考勤数据确认通知**\n\n{name} 你好，你的 **{month}月** 考勤数据已生成：\n\n{card}\n\n✅ 数据无误 → 请登录系统点击「确认无误」\n❌ 数据有误 → 请于 **下月3日前** 点击「有异议」并填写原因\n\n⏰ 逾期未确认将按当前数据结算\n\n👉 打开工时管理系统：file:///M:/GLXT/index.html'
   },
   dx_urge: {
     label: '大象-加急提醒', channel: 'daxiang', type: 'urge',
-    text: '🚨 **【加急】{month}月考勤确认提醒**\n\n{name}，你尚未完成 {month}月考勤确认！\n\n{card}\n\n⚠️ **截止时间：下月3日**\n逾期系统将自动锁定，届时无法修改。\n\n请立即登录系统核对并确认！\n\n👉 打开审核管理系统：file:///M:/GLXT/index.html'
+    text: '🚨 **【加急】{month}月考勤确认提醒**\n\n{name}，你尚未完成 {month}月考勤确认！\n\n{card}\n\n⚠️ **截止时间：下月3日**\n逾期系统将自动锁定，届时无法修改。\n\n请立即登录系统核对并确认！\n\n👉 打开工时管理系统：file:///M:/GLXT/index.html'
   },
   sys_confirm: {
     label: '系统-考勤确认', channel: 'system', type: 'confirm',
@@ -1360,15 +1358,18 @@ function _getScheduleForMonth(yearStr, monthStr) {
   const key = `${yearStr}_${monthStr}`;
   if (_schedDataCache[key] !== undefined) return _schedDataCache[key];
   const now = new Date();
-  if (parseInt(yearStr) === now.getFullYear() && parseInt(monthStr) === now.getMonth() + 1) {
+  const yearNum = parseInt(yearStr), monthNum = parseInt(monthStr);
+  if (yearNum === now.getFullYear() && monthNum === now.getMonth() + 1) {
     _schedDataCache[key] = SCHEDULE_DATA;
     return SCHEDULE_DATA;
   }
-  const schedKey = `glxt_schedule_${yearStr}_${monthStr}`;
+  // 使用 loadScheduleData 统一读取（服务端优先，localStorage 降级）
+  // 注意：存储 key 格式为 glxt_schedule_YYYY_M（月份不带前导零），需用数字格式
   let data = null;
   try {
-    const raw = localStorage.getItem(schedKey);
-    if (raw) data = JSON.parse(raw);
+    data = typeof loadScheduleData === 'function'
+      ? loadScheduleData(yearNum, monthNum)
+      : (function() { const raw = _storageGetRaw(`glxt_schedule_${yearNum}_${monthNum}`); return raw ? JSON.parse(raw) : null; })();
   } catch(e) {}
   _schedDataCache[key] = data;
   return data;
@@ -1934,7 +1935,7 @@ function _attShowSendConfirm() {
             <span class="att-send-channel-icon" style="background:rgba(22,100,255,0.08);color:#1664FF">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="10" rx="2" stroke="currentColor" stroke-width="1.3"/><path d="M2 6l6 3.5L14 6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
             </span>
-            <span>审核管理系统（系统公告 + 个人面板确认）</span>
+            <span>工时管理系统（系统公告 + 个人面板确认）</span>
             <span class="att-send-channel-tag att-send-channel-tag-default">默认</span>
           </label>
           <label class="att-send-channel-option">
@@ -2298,7 +2299,7 @@ function _attGenNotifyScreenshot() {
 
   // 底部水印
   ctx.fillStyle = '#C0C0C0'; ctx.font = '9px "PingFang SC","Microsoft YaHei",sans-serif';
-  ctx.fillText('由 GLXT 审核管理系统自动生成 · ' + new Date().toLocaleString(), pad, H - 10);
+  ctx.fillText('由 GLXT 工时管理系统自动生成 · ' + new Date().toLocaleString(), pad, H - 10);
 
   canvas.toBlob(function(blob) {
     if (!blob) { showToast('截图生成失败', 'error'); return; }
@@ -2529,7 +2530,7 @@ function _attNotifyRemindAll() {
   ANNOUNCEMENTS_DATA.unshift({
     id: Date.now(), type: 'p1', status: 'unread',
     title: `【加急】${monthNum}月考勤确认催促`,
-    text: `${monthNum}月考勤数据仍有 ${unconfirmedIds.length} 人未确认，请尽快登录审核管理系统完成确认。逾期未确认将视为默认无异议。`,
+    text: `${monthNum}月考勤数据仍有 ${unconfirmedIds.length} 人未确认，请尽快登录工时管理系统完成确认。逾期未确认将视为默认无异议。`,
     createdAt: new Date().toISOString().slice(0, 10),
     createdBy: CURRENT_USER.name || '系统管理员',
     attNotifyMonth: ym,

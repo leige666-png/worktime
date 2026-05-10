@@ -1,10 +1,14 @@
 // ============================================================
-// 权限登录模块 (auth.js) r134
+// 权限登录模块 (auth.js) r136
+// r136: 多用户登录 — cookie-session + 选人登录，修复局域网全员同一账号 bug
+// r135: 全栈部署模式 — SSO 信息从服务端 API 获取
 // r134: 3级角色体系：admin（管理员）/ leader（小组长）/ reviewer（审核员）
 // wb_aijunlei 永久拥有 admin 角色，无需申请，不可撤销
 //
-// 登录方式：大象 SSO 一键登录（零延迟）
-// 数据源：data/sso-user.js（SSO_USER_INFO 全局变量）
+// 登录方式：
+//   1. 大象 SSO 自动登录（Nginx 网关注入 + cookie）
+//   2. 局域网选人登录（从成员列表选择 + cookie）
+//   3. URL 参数登录（开发调试）
 // 角色由 MEMBERS_DATA 中的 role 字段决定，登录时不再提供角色选择
 // ============================================================
 
@@ -20,14 +24,50 @@ var AUTH_ADMIN_INFO = {
 };
 
 // ============================================================
-// SSO 信息读取（从全局变量 SSO_USER_INFO）
+// SSO 信息读取（V4.2: SSO header / cookie / URL 参数）
 // ============================================================
+// 缓存 SSO 信息，避免重复请求
+var _ssoInfoCache = null;
+
 function _getSsoUserInfo() {
-  // SSO_USER_INFO 由 data/sso-user.js 定义，在 auth.js 之前加载
-  if (typeof SSO_USER_INFO !== 'undefined' && SSO_USER_INFO && SSO_USER_INFO.ok) {
-    return { ok: true, mis: SSO_USER_INFO.mis, name: SSO_USER_INFO.name, env: SSO_USER_INFO.env || 'prod' };
+  // 优先返回缓存
+  if (_ssoInfoCache) return _ssoInfoCache;
+
+  // 1. 尝试从 URL 参数获取（开发模式 / 登录中转）
+  try {
+    var params = new URLSearchParams(window.location.search);
+    var devMis = params.get('dev_mis') || params.get('mis');
+    var devName = params.get('dev_name') || params.get('name');
+    if (devMis) {
+      _ssoInfoCache = { ok: true, mis: devMis, name: devName || devMis, env: 'dev' };
+      return _ssoInfoCache;
+    }
+  } catch (e) {}
+
+  // 2. 尝试从服务端 API 同步获取
+  try {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', '/api/auth/sso-info', false); // 同步请求
+    xhr.send();
+    if (xhr.status === 200) {
+      var resp = JSON.parse(xhr.responseText);
+      if (resp.ok && resp.mis) {
+        _ssoInfoCache = { ok: true, mis: resp.mis, name: resp.name || resp.mis, env: resp.env || 'prod' };
+        return _ssoInfoCache;
+      }
+    }
+  } catch (e) {
+    console.warn('[auth] SSO API 请求失败:', e);
   }
-  return { ok: false, error: 'SSO 信息不可用，请检查 data/sso-user.js 文件是否存在' };
+
+  // 3. 兼容旧版：尝试读取全局变量 SSO_USER_INFO（本地开发降级）
+  if (typeof SSO_USER_INFO !== 'undefined' && SSO_USER_INFO && SSO_USER_INFO.ok) {
+    _ssoInfoCache = { ok: true, mis: SSO_USER_INFO.mis, name: SSO_USER_INFO.name, env: SSO_USER_INFO.env || 'prod' };
+    return _ssoInfoCache;
+  }
+
+  // V4.2: 未登录状态，前端将弹出选人登录窗
+  return { ok: false, error: '未登录，请选择您的身份登录系统' };
 }
 
 // ============================================================
@@ -210,9 +250,13 @@ var unread = _notifications.filter(function(n) { return !n.read; }).length;
 }
 
 // ============================================================
-// 登录弹窗（全新版：即时 SSO 识别 + 角色选择）
+// 登录弹窗（V4.2: SSO 识别 + 选人登录双模式）
 // ============================================================
+// V4.2 选人登录：暂存选中的成员
+var _selectedLoginMember = null;
+
 function showLoginModal() {
+  _selectedLoginMember = null;
   var sso = _getSsoUserInfo();
   var ssoReady = sso.ok && sso.mis;
 
@@ -224,14 +268,12 @@ function showLoginModal() {
   // r134: 角色由数据决定，不再提供选择
   var memberRole = isPermanentOwner ? 'admin' : (member ? (member.role || 'reviewer') : 'reviewer');
 
-  var adminAvatarHtml = '<div style="width:32px;height:32px;border-radius:8px;background:#1664FF;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700">艾</div>';
-
   var content = '<div style="text-align:center;padding:8px 0 20px">'
     + '<div style="width:72px;height:72px;border-radius:20px;background:linear-gradient(135deg,#1664FF,#3B82F6);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;box-shadow:0 6px 20px rgba(22,100,255,0.35)">'
     + '<svg width="40" height="40" viewBox="0 0 40 40" fill="none"><ellipse cx="20" cy="24" rx="14" ry="10" fill="white" opacity="0.9"/><ellipse cx="12" cy="28" rx="4" ry="6" fill="white" opacity="0.8"/><ellipse cx="28" cy="28" rx="4" ry="6" fill="white" opacity="0.8"/><circle cx="15" cy="20" r="2.5" fill="#1664FF"/><circle cx="25" cy="20" r="2.5" fill="#1664FF"/><path d="M8 18C8 12 13 8 20 8C27 8 32 12 32 18" stroke="white" stroke-width="2" stroke-linecap="round" fill="none"/></svg>'
     + '</div>'
-    + '<div style="font-size:18px;font-weight:700;margin-bottom:6px;color:#1d2129">大象账号 SSO 登录</div>'
-    + '<div style="font-size:13px;color:var(--text-tertiary);line-height:1.6">使用您当前登录的大象账号<br>一键授权进入审核管理系统</div>'
+    + '<div style="font-size:18px;font-weight:700;margin-bottom:6px;color:#1d2129">' + (ssoReady ? '大象账号 SSO 登录' : '选择身份登录') + '</div>'
+    + '<div style="font-size:13px;color:var(--text-tertiary);line-height:1.6">' + (ssoReady ? '使用您当前登录的大象账号<br>一键授权进入工时管理系统' : '请从下方成员列表中选择您的姓名<br>确认后即可登录工时管理系统') + '</div>'
     + '</div>';
 
   if (ssoReady) {
@@ -255,7 +297,7 @@ function showLoginModal() {
         + '</div></div></div>';
     }
 
-    // ── r134: 显示当前角色信息（不再提供角色选择） ──
+    // ── r134: 显示当前角色信息 ──
     var loginRp = ROLE_PERMISSIONS[memberRole] || ROLE_PERMISSIONS.reviewer;
     if (isPermanentOwner) {
       content += '<div style="background:#F3E8FF;border-radius:12px;padding:14px 16px;margin-bottom:16px;border:1px solid #D6B4FC">'
@@ -269,20 +311,33 @@ function showLoginModal() {
         + '</div></div>';
     }
   } else {
-    // ── SSO 不可用提示 ──
-    content += '<div style="background:#FFFBE6;border:1px solid #FFE58F;border-radius:12px;padding:14px 16px;margin-bottom:16px">'
+    // ── V4.2: SSO 不可用 — 显示「选人登录」界面 ──
+    content += '<div style="background:#E8F4FF;border:1px solid #91CAFF;border-radius:12px;padding:14px 16px;margin-bottom:16px">'
       + '<div style="display:flex;align-items:flex-start;gap:10px">'
-      + '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#D46B08" stroke-width="2" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'
+      + '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1664FF" stroke-width="2" style="flex-shrink:0;margin-top:1px"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>'
       + '<div style="flex:1">'
-      + '<div style="font-size:13px;font-weight:600;color:#D46B08;margin-bottom:4px">大象 SSO 信息未就绪</div>'
-      + '<div style="font-size:12px;color:#86909c;line-height:1.6;margin-bottom:10px">未检测到 SSO 登录信息，请确认 <b>data/sso-user.js</b> 文件存在且内容正确，然后刷新页面即可一键登录。</div>'
-      + '<div style="font-size:11px;color:#86909c;line-height:1.5;padding:8px 10px;background:#fff;border-radius:6px;border:1px solid #f0f0f0;font-family:monospace">'
-      + '1. 确认 data/sso-user.js 文件存在<br>2. 文件内容格式：var SSO_USER_INFO = { ok: true, mis: "你的MIS号", name: "你的姓名", env: "prod" };<br>3. 刷新本页面</div>'
+      + '<div style="font-size:13px;font-weight:600;color:#1664FF;margin-bottom:4px">选择身份登录</div>'
+      + '<div style="font-size:12px;color:#86909c;line-height:1.6">局域网模式：请从下方成员列表中选择您的姓名，或搜索 MIS 号登录。</div>'
       + '</div></div></div>';
+
+    // ── 搜索框 ──
+    content += '<div style="margin-bottom:12px">'
+      + '<input type="text" id="loginSearchInput" placeholder="搜索姓名或 MIS 号..." oninput="_filterLoginMembers()" '
+      + 'style="width:100%;box-sizing:border-box;height:38px;border:1px solid #d9d9d9;border-radius:10px;padding:0 12px;font-size:13px;outline:none;transition:border-color 0.2s" '
+      + 'onfocus="this.style.borderColor=\'#1664FF\'" onblur="this.style.borderColor=\'#d9d9d9\'">'
+      + '</div>';
+
+    // ── 成员列表 ──
+    content += '<div id="loginMemberList" style="max-height:240px;overflow-y:auto;border:1px solid var(--border-light);border-radius:10px;background:#fff">';
+    content += _buildLoginMemberList('');
+    content += '</div>';
+
+    // ── 当前选中提示 ──
+    content += '<div id="loginSelectedTip" style="margin-top:8px;font-size:12px;color:var(--text-tertiary);text-align:center">请选择您的身份</div>';
   }
 
-  // r134: 权限说明
-  content += '<div style="background:var(--bg);border-radius:10px;padding:12px 14px;font-size:12px;color:var(--text-tertiary);line-height:1.8">'
+  // 权限说明
+  content += '<div style="background:var(--bg);border-radius:10px;padding:12px 14px;font-size:12px;color:var(--text-tertiary);line-height:1.8;margin-top:12px">'
     + '<div style="font-weight:600;color:var(--text-secondary);margin-bottom:4px">权限说明</div>'
     + '<div>· <b style="color:#7B2FBE">管理员</b>：最高权限，wb_aijunlei 永久拥有，可在权限管理中分配</div>'
     + '<div>· <b style="color:#1664FF">小组长</b>：管理所辖团队的排班、审批与数据</div>'
@@ -291,16 +346,117 @@ function showLoginModal() {
 
   var footer = '<button class="btn btn-default" onclick="closeModal()">取消</button>';
   if (ssoReady) {
-    footer += '<button class="btn btn-primary" id="loginSubmitBtn" onclick="doLogin()">'
-      + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="margin-right:5px;vertical-align:-2px"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="10 17 15 12 10 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="15" y1="12" x2="3" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>'
-      + '一键登录</button>';
+    footer += '<button class="btn btn-primary" id="loginSubmitBtn" onclick="doLogin()">一键登录</button>';
+  } else {
+    footer += '<button class="btn btn-primary" id="loginSubmitBtn" onclick="doManualLogin()" disabled>确认登录</button>';
   }
 
-  openModal('登录审核管理系统', content, footer);
+  openModal('登录工时管理系统', content, footer);
 }
 
 // ============================================================
-// 执行 SSO 登录（同步，瞬间完成）
+// V4.2: 选人登录 — 辅助函数
+// ============================================================
+function _buildLoginMemberList(keyword) {
+  var kw = (keyword || '').toLowerCase().trim();
+  var members = MEMBERS_DATA.filter(function(m) {
+    if (!kw) return true;
+    return (m.name && m.name.toLowerCase().indexOf(kw) >= 0)
+      || (m.mis && m.mis.toLowerCase().indexOf(kw) >= 0)
+      || (m.team && m.team.toLowerCase().indexOf(kw) >= 0);
+  });
+  if (members.length === 0) {
+    return '<div style="padding:24px;text-align:center;color:var(--text-tertiary);font-size:13px">未找到匹配的成员</div>';
+  }
+  var html = '';
+  members.forEach(function(m) {
+    var avatarSrc = m.avatar || _uiAvatar(m.name, 36);
+    var rp = ROLE_PERMISSIONS[m.role || 'reviewer'] || ROLE_PERMISSIONS.reviewer;
+    var isSelected = _selectedLoginMember && _selectedLoginMember.mis === m.mis;
+    html += '<div class="login-member-item' + (isSelected ? ' selected' : '') + '" '
+      + 'onclick="_selectLoginMember(\'' + m.mis + '\')" '
+      + 'style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;border-bottom:1px solid #f5f5f5;transition:background 0.15s'
+      + (isSelected ? ';background:#EBF5FF' : '') + '" '
+      + 'onmouseover="if(!this.classList.contains(\'selected\'))this.style.background=\'#fafafa\'" '
+      + 'onmouseout="if(!this.classList.contains(\'selected\'))this.style.background=\'#fff\'" '
+      + 'data-mis="' + m.mis + '">'
+      + '<img src="' + avatarSrc + '" style="width:36px;height:36px;border-radius:10px;object-fit:cover;flex-shrink:0" onerror="this.src=\'' + _uiAvatar(m.name, 36) + '\'">'
+      + '<div style="flex:1;min-width:0">'
+      + '<div style="font-size:13px;font-weight:600;color:#1d2129">' + m.name + '</div>'
+      + '<div style="font-size:11px;color:#86909c">' + m.mis + (m.team ? ' · ' + m.team : '') + '</div>'
+      + '</div>'
+      + '<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:' + rp.badgeBg + ';color:' + rp.badgeColor + ';font-weight:500">' + rp.label + '</span>'
+      + (isSelected ? '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8L6.5 11.5L13 4.5" stroke="#1664FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' : '')
+      + '</div>';
+  });
+  return html;
+}
+
+function _selectLoginMember(mis) {
+  var m = MEMBERS_DATA.find(function(item) { return item.mis === mis; });
+  if (!m) return;
+  _selectedLoginMember = m;
+  // 更新列表高亮
+  var listEl = document.getElementById('loginMemberList');
+  if (listEl) listEl.innerHTML = _buildLoginMemberList(
+    (document.getElementById('loginSearchInput') || {}).value || ''
+  );
+  // 更新选中提示
+  var tipEl = document.getElementById('loginSelectedTip');
+  if (tipEl) {
+    tipEl.innerHTML = '<span style="color:#1664FF;font-weight:600">已选择：' + m.name + '</span>（' + m.mis + '）';
+  }
+  // 启用登录按钮
+  var btn = document.getElementById('loginSubmitBtn');
+  if (btn) btn.disabled = false;
+}
+
+function _filterLoginMembers() {
+  var input = document.getElementById('loginSearchInput');
+  var kw = input ? input.value : '';
+  var listEl = document.getElementById('loginMemberList');
+  if (listEl) listEl.innerHTML = _buildLoginMemberList(kw);
+}
+
+// V4.2: 选人登录 — POST 到服务端设 cookie
+function doManualLogin() {
+  if (!_selectedLoginMember) {
+    showToast('请先从列表中选择您的身份', 'warning');
+    return;
+  }
+  var btn = document.getElementById('loginSubmitBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '登录中...'; }
+
+  var mis = _selectedLoginMember.mis;
+  var name = _selectedLoginMember.name;
+
+  // POST 到服务端设置 cookie
+  try {
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/auth/login', false); // 同步
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.send(JSON.stringify({ mis: mis, name: name }));
+    if (xhr.status === 200) {
+      var resp = JSON.parse(xhr.responseText);
+      if (resp.ok) {
+        // 清除 SSO 缓存（下次 _getSsoUserInfo 会重新读 cookie）
+        _ssoInfoCache = null;
+        // 完成前端登录流程
+        _completeLogin(_selectedLoginMember, mis, null);
+        _selectedLoginMember = null;
+        return;
+      }
+    }
+    showToast('登录请求失败，请重试', 'error');
+  } catch (e) {
+    console.error('[auth] 登录请求失败:', e);
+    showToast('网络错误，请检查服务器连接', 'error');
+  }
+  if (btn) { btn.disabled = false; btn.textContent = '确认登录'; }
+}
+
+// ============================================================
+// 执行 SSO 登录（V4.2: 同时 POST 设 cookie）
 // ============================================================
 function doLogin() {
   var btn = document.getElementById('loginSubmitBtn');
@@ -308,7 +464,7 @@ function doLogin() {
 
   var sso = _getSsoUserInfo();
   if (!sso.ok || !sso.mis) {
-    showToast('大象 SSO 信息不可用，请检查 data/sso-user.js 文件后刷新页面', 'error');
+    showToast('SSO 信息不可用，请在 URL 中添加 ?dev_mis=xxx&dev_name=xxx 参数后刷新页面', 'error');
     if (btn) { btn.disabled = false; btn.textContent = '一键登录'; }
     return;
   }
@@ -325,6 +481,16 @@ function doLogin() {
     role = member.role || 'reviewer';
   } else {
     role = 'reviewer';
+  }
+
+  // V4.2: 同步 POST 设 cookie（确保刷新后身份不丢失）
+  try {
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/auth/login', false);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.send(JSON.stringify({ mis: mis, name: sso.name || mis }));
+  } catch (e) {
+    console.warn('[auth] 设置 cookie 失败（不影响本次登录）:', e);
   }
 
   if (member) {
@@ -365,16 +531,26 @@ function _completeLogin(member, mis, role) {
   closeModal(); _updateAuthUI();
   var rp = ROLE_PERMISSIONS[role] || ROLE_PERMISSIONS.reviewer;
   showToast('欢迎回来，' + member.name + '！当前身份：' + rp.label, 'success');
-  _pushNotify({ type: 'login', title: '登录成功', body: '您已通过大象 SSO 以「' + rp.label + '」身份登录审核管理系统', icon: 'check', color: '#e8ffea' });
+  _pushNotify({ type: 'login', title: '登录成功', body: '您已通过大象 SSO 以「' + rp.label + '」身份登录工时管理系统', icon: 'check', color: '#e8ffea' });
   WORK_LOGS.unshift({ id: Date.now(), time: new Date().toLocaleString('zh-CN'), module: '系统管理', action: '用户登录', operator: member.name, operatorMis: member.mis || mis, target: member.name + '（' + (member.mis || mis) + '）通过大象 SSO 登录，身份：' + rp.label, remark: '' });
   saveWorkLogs();
 }
 
 // ============================================================
-// 退出登录
+// 退出登录（V4.2: 同时清除服务端 cookie）
 // ============================================================
 function doLogout() {
   var name = CURRENT_USER.name;
+  // V4.2: POST 到服务端清除 cookie
+  try {
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/auth/logout', false);
+    xhr.send();
+  } catch (e) {
+    console.warn('[auth] 清除服务端 cookie 失败:', e);
+  }
+  // 清除 SSO 缓存
+  _ssoInfoCache = null;
   _clearSession();
   CURRENT_USER.id = 0; CURRENT_USER.name = '游客'; CURRENT_USER.mis = '';
   CURRENT_USER.role = 'reviewer'; CURRENT_USER.avatar = ''; CURRENT_USER.team = '';
@@ -458,7 +634,7 @@ function switchDrawerTab(tab, btn) {
   document.addEventListener('keydown', function(e) {
     if (_activeDrawer === 'user') {
       if (e.key === 'Escape') { closeAllDrawers(); return; }
-      var tabOrder = ['account','notify','approval','settings'];
+      var tabOrder = ['account','notify','settings'];
       var idx = tabOrder.indexOf(_activeDrawerTab);
       if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
         e.preventDefault();
@@ -483,7 +659,6 @@ function _renderDrawerTab(tab) {
   switch(tab) {
     case 'account':  content.innerHTML = _buildAccountTab();  break;
     case 'notify':   content.innerHTML = _buildNotifyTab();   break;
-    case 'approval': content.innerHTML = _buildApprovalTab(); break;
     case 'settings': content.innerHTML = _buildSettingsTab(); break;
     default:         content.innerHTML = _buildAccountTab();
   }
@@ -590,6 +765,32 @@ function _buildAccountTab() {
   infoRows.forEach(function(r) {
     html += '<div class="ud-info-row"><span class="ud-info-label">' + r[0] + '</span><span class="ud-info-value">' + r[1] + '</span></div>';
   });
+  html += '</div></div>';
+
+  // ─── 账号安全区块 ───
+  html += '<div class="ud-section" style="padding-top:0">'
+    + '<div class="ud-section-title">账号安全</div>'
+    + '<div class="ud-card">';
+  // 系统账号（MIS）
+  html += '<div class="ud-info-row"><span class="ud-info-label">系统账号</span><span class="ud-info-value" style="font-family:\'SF Mono\',Consolas,monospace;font-size:12px;letter-spacing:0.3px">' + (user.mis || '—') + '</span></div>';
+  // SSO Token 状态
+  var tokenStatus = '有效';
+  var tokenColor = '#00B42A';
+  try {
+    var sess = JSON.parse(localStorage.getItem(AUTH_STORAGE_KEY));
+    if (sess && sess.loginAt) {
+      var remain = AUTH_SESSION_TTL - (Date.now() - sess.loginAt);
+      if (remain <= 0) { tokenStatus = '已过期'; tokenColor = '#F53F3F'; }
+    } else { tokenStatus = '未获取'; tokenColor = '#86909c'; }
+  } catch(e) { tokenStatus = '未知'; tokenColor = '#86909c'; }
+  html += '<div class="ud-info-row"><span class="ud-info-label">SSO 令牌</span><span class="ud-info-value"><span style="display:inline-flex;align-items:center;gap:4px"><span style="width:6px;height:6px;border-radius:50%;background:' + tokenColor + ';display:inline-block"></span><span style="font-size:12px;color:' + tokenColor + ';font-weight:500">' + tokenStatus + '</span></span></span></div>';
+  // 登录 IP / 设备
+  html += '<div class="ud-info-row"><span class="ud-info-label">登录设备</span><span class="ud-info-value" style="font-size:12px;color:var(--text-secondary)">当前浏览器</span></div>';
+  // 操作按钮
+  html += '<div style="display:flex;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border-light)">'
+    + '<button onclick="navigator.clipboard.writeText(\'' + (user.mis || '') + '\');showToast(\'账号已复制到剪贴板\',\'success\')" style="flex:1;padding:7px 0;background:var(--bg);border:1px solid var(--border-light);border-radius:var(--radius-sm);font-size:12px;color:var(--text-secondary);cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:4px;transition:all 0.15s"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>复制账号</button>'
+    + '<button onclick="closeAllDrawers();showLoginModal()" style="flex:1;padding:7px 0;background:var(--bg);border:1px solid var(--border-light);border-radius:var(--radius-sm);font-size:12px;color:var(--primary);cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:4px;transition:all 0.15s"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>重新认证</button>'
+    + '</div>';
   html += '</div></div>';
 
   // ─── 状态条 ───

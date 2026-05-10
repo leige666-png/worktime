@@ -1,85 +1,224 @@
 // ============================================================
-// 持久化存储模块 - localStorage 接管所有可变数据
+// 持久化存储模块 V4.1 — 服务端 API 模式（多人共享数据 + 乐观锁）
 // 加载顺序：data/members.js → data/queues.js → data/schedules.js
 //           → data/overtime.js → data/storage.js（本文件）
 //           → js/app.js → ...
+//
+// 【架构说明】
+// 原始版本使用 localStorage，每个用户数据独立。
+// 本版本改为通过 REST API 读写服务端 SQLite 数据库，所有用户共享同一份数据。
+//
+// 【V4.1 新增：乐观锁并发控制】
+// 服务端每个 key 都带有 version 版本号，每次更新自增。
+// 写入时发送 expectedVersion，若版本不匹配（被其他用户修改），
+// 服务端返回 409 冲突，前端提示用户选择"覆盖"或"刷新"。
+//
+// 【设计原则】
+// 1. 页面加载时，从服务器批量拉取所有 glxt_ 开头的数据到内存
+// 2. 运行时操作全局变量（SHIFTS、SCHEDULE_DATA 等），体验与原来完全一致
+// 3. 每次 save 操作同时更新内存 + 异步写入服务端（带 version 检查）
+// 4. 保留 localStorage 作为离线降级方案
 // ============================================================
 
-// 数据版本号：结构变更时递增，触发自动迁移
-// v5: 清空所有模拟排班数据，改为全空（OFF）初始状态
-// v6: 彻底清除历史脏排班 key 和白名单（保留当前月数据）
-const STORAGE_VERSION = '6';
-const STORAGE_VERSION_KEY = 'glxt_storage_version';
+// ===== API 基础设施 =====
+const _API_BASE = '';  // 同域部署，无需前缀
 
-// 若版本不匹配，清除旧缓存，强制使用新的 JS 默认值
-if (localStorage.getItem(STORAGE_VERSION_KEY) !== STORAGE_VERSION) {
-  // v6 迁移：先保存当前月排班数据，再清除所有排班 key 和白名单
-  const _now = new Date();
-  const _curYear = _now.getFullYear(), _curMonth = _now.getMonth() + 1;
-  const _curScheduleKey = `glxt_schedule_${_curYear}_${_curMonth}`;
-  // 读出当前月数据（可能是旧格式 key 或新格式 key）
-  let _savedCurMonth = null;
-  try {
-    const _raw = localStorage.getItem(_curScheduleKey) || localStorage.getItem('glxt_schedule_data');
-    if (_raw) _savedCurMonth = JSON.parse(_raw);
-  } catch (e) {}
-  // 清除所有 glxt_schedule_ 开头的 key
-  const _keysToRemove = [];
-  for (let _i = 0; _i < localStorage.length; _i++) {
-    const _k = localStorage.key(_i);
-    if (_k && _k.startsWith('glxt_schedule_')) _keysToRemove.push(_k);
+// ===== 版本号缓存 =====
+// 记录每个 key 从服务端获取到的 version，写入时用于乐观锁
+let _versionCache = {};
+
+// 异步写入服务端（带乐观锁）
+function _apiSet(key, value, onConflict) {
+  const body = typeof value === 'string' ? value : JSON.stringify(value);
+  const payload = { value: body };
+
+  // 如果有缓存的版本号，使用乐观锁
+  if (_versionCache[key] !== undefined && _versionCache[key] > 0) {
+    payload.expectedVersion = _versionCache[key];
   }
-  _keysToRemove.forEach(_k => localStorage.removeItem(_k));
-  // 清除白名单
-  localStorage.removeItem('glxt_imported_months');
-  // 清除旧格式排班数据
-  localStorage.removeItem('glxt_members_data');
-  localStorage.removeItem('glxt_schedule_data');
-  // 写回当前月数据（如果有）
-  if (_savedCurMonth) {
-    localStorage.setItem(_curScheduleKey, JSON.stringify(_savedCurMonth));
-    localStorage.setItem('glxt_imported_months', `${_curYear}_${_curMonth}`);
-  }
-  localStorage.setItem(STORAGE_VERSION_KEY, STORAGE_VERSION);
-  console.log('[storage] v6 迁移完成：已清除历史脏排班数据，当前月数据已保留');
+
+  fetch(`${_API_BASE}/api/kv/${encodeURIComponent(key)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  }).then(resp => {
+    if (resp.status === 409) {
+      // 版本冲突
+      return resp.json().then(data => {
+        console.warn(`[storage] 版本冲突: ${key}`, data);
+        _handleConflict(key, value, data, onConflict);
+      });
+    }
+    return resp.json().then(data => {
+      if (data.ok && data.version) {
+        _versionCache[key] = data.version;
+      }
+    });
+  }).catch(err => console.warn('[storage] API 写入失败:', key, err));
 }
 
-// 每次启动时扫描并清除非法排班 key
-// 保护白名单：glxt_imported_months 记录所有通过正规导入写入的年月（格式："2026_5,2026_6"）
-// 不在白名单中的非当前月排班 key，一律视为脏数据清除
-(function _cleanIllegalMonthData() {
-  const now = new Date();
-  const curYear = now.getFullYear(), curMonth = now.getMonth() + 1;
-  const curKey = `glxt_schedule_${curYear}_${curMonth}`;
-  const prefix = 'glxt_schedule_';
-  // 读取正规导入白名单
-  let importedMonths = [];
+// 同步写入服务端（用于关键操作，确保数据在页面刷新前持久化）
+function _apiSetSync(key, value) {
   try {
-    const raw = localStorage.getItem('glxt_imported_months');
-    if (raw) importedMonths = raw.split(',').filter(Boolean);
-  } catch (e) {}
-  const whiteKeys = new Set(importedMonths.map(m => `${prefix}${m}`));
-  whiteKeys.add(curKey);
-  whiteKeys.add('glxt_schedule_data');
-  whiteKeys.add('glxt_schedule_rules');  // r85: 规则数据不是排班月数据，不应被清理
-
-  // ⚠️ 必须先把所有 key 收集到数组，再删除
-  // 直接在 for 循环中删除会导致 localStorage.length 和索引实时变化，造成漏删
-  const allKeys = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const k = localStorage.key(i);
-    if (k) allKeys.push(k);
+    const body = typeof value === 'string' ? value : JSON.stringify(value);
+    const payload = { value: body };
+    if (_versionCache[key] !== undefined && _versionCache[key] > 0) {
+      payload.expectedVersion = _versionCache[key];
+    }
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', `${_API_BASE}/api/kv/${encodeURIComponent(key)}`, false);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.send(JSON.stringify(payload));
+    if (xhr.status === 200) {
+      const resp = JSON.parse(xhr.responseText);
+      if (resp.ok && resp.version) {
+        _versionCache[key] = resp.version;
+      }
+      return true;
+    } else if (xhr.status === 409) {
+      // 版本冲突时强制写入
+      const xhr2 = new XMLHttpRequest();
+      xhr2.open('PUT', `${_API_BASE}/api/kv/${encodeURIComponent(key)}`, false);
+      xhr2.setRequestHeader('Content-Type', 'application/json');
+      xhr2.send(JSON.stringify({ value: body }));
+      if (xhr2.status === 200) {
+        const resp2 = JSON.parse(xhr2.responseText);
+        if (resp2.ok && resp2.version) _versionCache[key] = resp2.version;
+        return true;
+      }
+    }
+  } catch (e) {
+    console.warn('[storage] 同步写入失败:', key, e);
   }
-  const keysToRemove = allKeys.filter(k => k.startsWith(prefix) && !whiteKeys.has(k));
-  keysToRemove.forEach(k => {
-    localStorage.removeItem(k);
-    console.warn(`[storage] 清除非法排班 key: ${k}`);
+  return false;
+}
+
+// 版本冲突处理
+function _handleConflict(key, localValue, conflictData, onConflict) {
+  if (typeof onConflict === 'function') {
+    onConflict(key, localValue, conflictData);
+    return;
+  }
+  // 默认冲突处理：提示用户
+  const friendlyKey = _getFriendlyKeyName(key);
+  const msg = `【数据冲突提示】\n\n"${friendlyKey}" 已被其他用户修改。\n\n点击"确定"用您的数据覆盖服务端，\n点击"取消"刷新页面获取最新数据。`;
+
+  if (confirm(msg)) {
+    // 用户选择覆盖：不带 expectedVersion 强制写入
+    _apiSetForce(key, localValue);
+  } else {
+    // 用户选择刷新
+    window.location.reload();
+  }
+}
+
+// 强制写入（不带版本号）
+function _apiSetForce(key, value) {
+  const body = typeof value === 'string' ? value : JSON.stringify(value);
+  fetch(`${_API_BASE}/api/kv/${encodeURIComponent(key)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ value: body })
+  }).then(resp => resp.json()).then(data => {
+    if (data.ok && data.version) {
+      _versionCache[key] = data.version;
+    }
+  }).catch(err => console.warn('[storage] API 强制写入失败:', key, err));
+}
+
+// key 名称友好化
+function _getFriendlyKeyName(key) {
+  const map = {
+    'glxt_shifts': '班次配置',
+    'glxt_leave_types': '请假类型',
+    'glxt_members_data': '人员数据',
+    'glxt_approval_records': '审批记录',
+    'glxt_overtime_records': '工时记录',
+    'glxt_work_logs': '工作日志',
+    'glxt_announcements': '排班公告',
+    'glxt_schedule_rules': '排班规则',
+    'glxt_custom_calendars': '自定义日历',
+    'glxt_custom_teams': '团队配置',
+    'glxt_queues_data': '队列数据',
+    'glxt_worktime_types': '工时类型',
+  };
+  if (map[key]) return map[key];
+  if (key.startsWith('glxt_schedule_')) {
+    const parts = key.replace('glxt_schedule_', '').split('_');
+    return `排班数据 (${parts[0]}年${parts[1]}月)`;
+  }
+  return key;
+}
+
+// 异步批量写入（不带乐观锁，用于初始化等批量场景）
+function _apiBatchSet(items) {
+  const data = {};
+  Object.entries(items).forEach(([k, v]) => {
+    data[k] = typeof v === 'string' ? v : JSON.stringify(v);
   });
-  if (keysToRemove.length > 0) {
-    console.log(`[storage] 共清除 ${keysToRemove.length} 个非法排班 key`);
+  fetch(`${_API_BASE}/api/kv/batch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ items: data })
+  }).then(resp => resp.json()).then(result => {
+    // 批量写入后无法获取每个 key 的 version，需要重新拉取
+    if (result.ok) {
+      _refreshVersions(Object.keys(items));
+    }
+  }).catch(err => console.warn('[storage] API 批量写入失败:', err));
+}
+
+// 刷新指定 keys 的版本号
+function _refreshVersions(keys) {
+  if (!keys || keys.length === 0) return;
+  fetch(`${_API_BASE}/api/kv/batch-read`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ keys })
+  }).then(resp => resp.json()).then(data => {
+    if (data.ok && data.versions) {
+      Object.assign(_versionCache, data.versions);
+    }
+  }).catch(() => {});
+}
+
+// 异步删除
+function _apiDel(key) {
+  delete _versionCache[key];
+  fetch(`${_API_BASE}/api/kv/${encodeURIComponent(key)}`, {
+    method: 'DELETE'
+  }).catch(err => console.warn('[storage] API 删除失败:', key, err));
+}
+
+// ===== 服务端缓存 — 页面加载时批量拉取 =====
+let _serverCache = {};
+let _serverLoaded = false;
+
+// 同步加载服务端数据（使用同步 XMLHttpRequest）
+(function _loadServerData() {
+  try {
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', `${_API_BASE}/api/kv?prefix=glxt_`, false);  // 同步请求
+    xhr.send();
+    if (xhr.status === 200) {
+      const resp = JSON.parse(xhr.responseText);
+      if (resp.ok && resp.data) {
+        _serverCache = resp.data;
+        _serverLoaded = true;
+        // V4.1: 同时缓存版本号
+        if (resp.versions) {
+          _versionCache = resp.versions;
+        }
+        console.log(`[storage] 从服务器加载了 ${Object.keys(_serverCache).length} 条数据（含版本号）`);
+      }
+    }
+  } catch (e) {
+    console.warn('[storage] 服务器连接失败，使用本地 localStorage 降级:', e);
+    _serverLoaded = false;
   }
 })();
 
+// ===== STORAGE_KEYS =====
 const STORAGE_KEYS = {
   SHIFTS:              'glxt_shifts',
   LEAVE_TYPES:         'glxt_leave_types',
@@ -88,53 +227,62 @@ const STORAGE_KEYS = {
   OVERTIME_RECORDS:    'glxt_overtime_records',
   WORK_LOGS:           'glxt_work_logs',
   MEMBERS_DATA:        'glxt_members_data',
-  ONDUTY_OVERRIDE:     'glxt_onduty_override',   // 在班天数自定义覆盖值（按年月存储）
-  ANNOUNCEMENTS:       'glxt_announcements',      // 排班公告列表
-  SCHEDULE_RULES:      'glxt_schedule_rules',     // 排班规则（按团队配置）
-  CUSTOM_CALENDARS:    'glxt_custom_calendars',   // 自定义排班日历卡片
-  ATT_NOTIFY:          'glxt_att_notify',          // r120: 考勤通知状态（按年月存储）
-  CUSTOM_TEAMS:        'glxt_custom_teams',        // r133: 自定义团队列表
-  QUEUES_DATA:         'glxt_queues_data',          // 队列管理数据
-  WORKTIME_TYPES:      'glxt_worktime_types',       // 统一工时类型（管理员可自定义）
+  ONDUTY_OVERRIDE:     'glxt_onduty_override',
+  ANNOUNCEMENTS:       'glxt_announcements',
+  SCHEDULE_RULES:      'glxt_schedule_rules',
+  CUSTOM_CALENDARS:    'glxt_custom_calendars',
+  ATT_NOTIFY:          'glxt_att_notify',
+  CUSTOM_TEAMS:        'glxt_custom_teams',
+  QUEUES_DATA:         'glxt_queues_data',
+  WORKTIME_TYPES:      'glxt_worktime_types',
 };
 
 // ---------- 排班数据按年月分 key 存储 ----------
-// key 格式：glxt_schedule_2026_4
 function _scheduleKey(year, month) {
   return `glxt_schedule_${year}_${month}`;
 }
 
-// 读取指定年月的排班数据（返回 null 表示无数据）
 function loadScheduleData(year, month) {
   return _storageGet(_scheduleKey(year, month), null);
 }
 
-// 将指定年月标记为"正规写入"，加入白名单，防止被脏数据清理误删
 function markMonthAsImported(year, month) {
   try {
     const key = 'glxt_imported_months';
-    const list = (localStorage.getItem(key) || '').split(',').filter(Boolean);
+    const raw = _storageGetRaw(key) || '';
+    const list = raw.split(',').filter(Boolean);
     const entry = `${year}_${month}`;
     if (!list.includes(entry)) {
       list.push(entry);
-      localStorage.setItem(key, list.join(','));
+      const newVal = list.join(',');
+      _storageSetRaw(key, newVal);
     }
   } catch (e) {}
 }
 
-// ---------- 通用读写 ----------
+// ---------- 通用读写（服务端优先，localStorage 降级）----------
 
-// #10: lz-string 压缩 — 仅对排班数据（glxt_schedule_ 开头）启用，其余 key 保持原样
-function _shouldCompress(key) {
-  return key && key.startsWith('glxt_schedule_') && typeof LZString !== 'undefined';
+function _storageGetRaw(key) {
+  if (_serverLoaded && _serverCache[key] !== undefined) {
+    return _serverCache[key];
+  }
+  return localStorage.getItem(key);
+}
+
+function _storageSetRaw(key, rawValue) {
+  // 写入内存缓存
+  _serverCache[key] = rawValue;
+  // 写入 localStorage（离线降级）
+  try { localStorage.setItem(key, rawValue); } catch (e) {}
+  // 异步写入服务端（带乐观锁）
+  _apiSet(key, rawValue);
 }
 
 function _storageGet(key, fallback) {
   try {
-    const raw = localStorage.getItem(key);
-    if (raw === null) return fallback;
-    // 兼容旧数据：以 '{' 或 '[' 开头的是未压缩 JSON，否则尝试解压
-    if (_shouldCompress(key) && raw.length > 0 && raw[0] !== '{' && raw[0] !== '[' && raw[0] !== 'n') {
+    const raw = _storageGetRaw(key);
+    if (raw === null || raw === undefined) return fallback;
+    if (typeof LZString !== 'undefined' && key.startsWith('glxt_schedule_') && raw.length > 0 && raw[0] !== '{' && raw[0] !== '[' && raw[0] !== 'n' && raw[0] !== '"') {
       const decompressed = LZString.decompressFromUTF16(raw);
       if (decompressed) return JSON.parse(decompressed);
     }
@@ -145,30 +293,40 @@ function _storageGet(key, fallback) {
   }
 }
 
-function _storageSet(key, value) {
+function _storageSet(key, value, sync) {
   try {
-    if (_shouldCompress(key)) {
-      const compressed = LZString.compressToUTF16(JSON.stringify(value));
-      localStorage.setItem(key, compressed);
+    const json = JSON.stringify(value);
+    // 写入内存缓存
+    _serverCache[key] = json;
+    // 写入 localStorage（离线降级）
+    try { localStorage.setItem(key, json); } catch (e) {}
+    // 写入服务端（sync=true 时同步写入，确保关键数据不丢失）
+    if (sync) {
+      _apiSetSync(key, json);
     } else {
-      localStorage.setItem(key, JSON.stringify(value));
+      _apiSet(key, json);
     }
   } catch (e) {
     console.warn('[storage] 写入失败:', key, e);
   }
 }
 
+function _storageDel(key) {
+  delete _serverCache[key];
+  delete _versionCache[key];
+  try { localStorage.removeItem(key); } catch (e) {}
+  _apiDel(key);
+}
+
 // ---------- 各数据源的 save 函数（供业务层调用）----------
 
 function saveShifts()          { _storageSet(STORAGE_KEYS.SHIFTS,           SHIFTS); }
 function saveLeaveTypes()      { _storageSet(STORAGE_KEYS.LEAVE_TYPES,      LEAVE_TYPES); }
-function saveCustomCalendars() { _storageSet(STORAGE_KEYS.CUSTOM_CALENDARS, CUSTOM_CALENDARS); }
+function saveCustomCalendars(sync) { _storageSet(STORAGE_KEYS.CUSTOM_CALENDARS, CUSTOM_CALENDARS, sync); }
 function saveScheduleData()    {
-  // 按当前视图年月分 key 存储，支持多月数据共存
   const year  = (typeof scheduleYear  !== 'undefined') ? scheduleYear  : new Date().getFullYear();
   const month = (typeof scheduleMonth !== 'undefined') ? scheduleMonth : new Date().getMonth() + 1;
   _storageSet(_scheduleKey(year, month), SCHEDULE_DATA);
-  // 排班数据变更后清除考勤统计缓存，确保下次查看考勤时数据是最新的
   if (typeof _clearAttCache === 'function') _clearAttCache();
 }
 function saveApprovalRecords() { _storageSet(STORAGE_KEYS.APPROVAL_RECORDS, APPROVAL_RECORDS); }
@@ -180,8 +338,7 @@ function saveCustomTeams()     { _storageSet(STORAGE_KEYS.CUSTOM_TEAMS,     CUST
 function saveQueuesData()      { _storageSet(STORAGE_KEYS.QUEUES_DATA,      QUEUES_DATA); }
 function saveWorktimeTypes()   { _storageSet(STORAGE_KEYS.WORKTIME_TYPES,   WORKTIME_TYPES); }
 
-// ---------- 初始化：从 localStorage 恢复数据 ----------
-// 若 localStorage 中没有数据（首次访问），则保留 JS 文件中的默认值并写入存储
+// ---------- 初始化：从服务端恢复数据 ----------
 
 (function initStorage() {
 
@@ -190,13 +347,11 @@ function saveWorktimeTypes()   { _storageSet(STORAGE_KEYS.WORKTIME_TYPES,   WORK
   if (savedShifts) {
     Object.keys(SHIFTS).forEach(k => delete SHIFTS[k]);
     Object.assign(SHIFTS, savedShifts);
-    // r110-fix: 补全旧版 localStorage 中丢失的 breakMinutes 字段
-    // 默认值参考 schedules.js 原始定义：工作班次默认60分钟午休，OFF为0
     let _shiftPatched = false;
     Object.keys(SHIFTS).forEach(k => {
       if (k === 'OFF') return;
       if (SHIFTS[k].start && SHIFTS[k].end && SHIFTS[k].breakMinutes === undefined) {
-        SHIFTS[k].breakMinutes = 60; // 工作班次默认60分钟午休
+        SHIFTS[k].breakMinutes = 60;
         _shiftPatched = true;
       }
     });
@@ -208,7 +363,6 @@ function saveWorktimeTypes()   { _storageSet(STORAGE_KEYS.WORKTIME_TYPES,   WORK
   // 2. LEAVE_TYPES（请假类型）
   const savedLeaveTypes = _storageGet(STORAGE_KEYS.LEAVE_TYPES, null);
   if (savedLeaveTypes) {
-    // 迁移旧颜色 class（leave-annual → leave-b3 等）
     const _colorMigration = {
       'leave-annual':    'leave-b3',
       'leave-sick':      'leave-o3',
@@ -220,11 +374,10 @@ function saveWorktimeTypes()   { _storageSet(STORAGE_KEYS.WORKTIME_TYPES,   WORK
     };
     LEAVE_TYPES.length = 0;
     savedLeaveTypes.forEach(lt => {
-      if (lt.id === 'sick') return; // 病假已删除，跳过
+      if (lt.id === 'sick') return;
       if (_colorMigration[lt.color]) lt.color = _colorMigration[lt.color];
       LEAVE_TYPES.push(lt);
     });
-    // 若过滤后为空，使用默认值
     if (LEAVE_TYPES.length === 0) {
       [{ id: 'annual', name: '年假', color: 'leave-b3', duration: 1, desc: '带薪年假' },
        { id: 'personal', name: '事假', color: 'leave-p3', duration: 0.5, desc: '个人事务' },
@@ -232,7 +385,7 @@ function saveWorktimeTypes()   { _storageSet(STORAGE_KEYS.WORKTIME_TYPES,   WORK
        { id: 'maternity', name: '产假', color: 'leave-g3', duration: 1, desc: '生育假期' }
       ].forEach(lt => LEAVE_TYPES.push(lt));
     }
-    saveLeaveTypes(); // 写回迁移后的数据
+    saveLeaveTypes();
   } else {
     saveLeaveTypes();
   }
@@ -241,11 +394,10 @@ function saveWorktimeTypes()   { _storageSet(STORAGE_KEYS.WORKTIME_TYPES,   WORK
   const now = new Date();
   const curYear = now.getFullYear(), curMonth = now.getMonth() + 1;
   const savedSchedule = _storageGet(_scheduleKey(curYear, curMonth), null)
-    || _storageGet(STORAGE_KEYS.SCHEDULE_DATA, null); // 兼容旧格式
+    || _storageGet(STORAGE_KEYS.SCHEDULE_DATA, null);
   if (savedSchedule) {
     Object.keys(SCHEDULE_DATA).forEach(k => delete SCHEDULE_DATA[k]);
     Object.assign(SCHEDULE_DATA, savedSchedule);
-    // 迁移旧格式：写入新 key
     _storageSet(_scheduleKey(curYear, curMonth), savedSchedule);
   } else {
     _storageSet(_scheduleKey(curYear, curMonth), SCHEDULE_DATA);
@@ -278,7 +430,7 @@ function saveWorktimeTypes()   { _storageSet(STORAGE_KEYS.WORKTIME_TYPES,   WORK
     saveWorkLogs();
   }
 
-  // 7. MEMBERS_DATA（人员数据，含角色/效率等可编辑字段）
+  // 7. MEMBERS_DATA（人员数据）
   const savedMembers = _storageGet(STORAGE_KEYS.MEMBERS_DATA, null);
   if (savedMembers) {
     MEMBERS_DATA.length = 0;
@@ -287,7 +439,7 @@ function saveWorktimeTypes()   { _storageSet(STORAGE_KEYS.WORKTIME_TYPES,   WORK
     saveMembersData();
   }
 
-  // 8. SCHEDULE_RULES（排班规则，按团队配置）
+  // 8. SCHEDULE_RULES（排班规则）
   const savedRules = _storageGet(STORAGE_KEYS.SCHEDULE_RULES, null);
   if (savedRules) {
     Object.keys(SCHEDULE_RULES).forEach(k => delete SCHEDULE_RULES[k]);
@@ -305,20 +457,17 @@ function saveWorktimeTypes()   { _storageSet(STORAGE_KEYS.WORKTIME_TYPES,   WORK
     saveCustomCalendars();
   }
 
-  // 10. CUSTOM_TEAMS（r133: 自定义团队）
+  // 10. CUSTOM_TEAMS（自定义团队）
   const savedTeams = _storageGet(STORAGE_KEYS.CUSTOM_TEAMS, null);
   if (savedTeams && Array.isArray(savedTeams)) {
     CUSTOM_TEAMS.length = 0;
     savedTeams.forEach(t => CUSTOM_TEAMS.push(t));
-    // 同步 TEAMS 数组，保持排班等模块兼容
     TEAMS.length = 0;
     CUSTOM_TEAMS.forEach(t => TEAMS.push(t.name));
   } else {
-    // 兼容 r132 旧数据：尝试从 glxt_custom_groups 迁移
     const oldGroups = _storageGet('glxt_custom_groups', null);
     if (oldGroups && Array.isArray(oldGroups)) {
       CUSTOM_TEAMS.length = 0;
-      // 旧组别是短名（高曝），需转为全称（高曝团队）
       oldGroups.forEach(g => {
         let fullName = g.name;
         if (!fullName.includes('团队') && !fullName.includes('管理层')) fullName += '团队';
@@ -326,29 +475,18 @@ function saveWorktimeTypes()   { _storageSet(STORAGE_KEYS.WORKTIME_TYPES,   WORK
       });
       TEAMS.length = 0;
       CUSTOM_TEAMS.forEach(t => TEAMS.push(t.name));
-      localStorage.removeItem('glxt_custom_groups');
+      _storageDel('glxt_custom_groups');
     }
     saveCustomTeams();
   }
 
-  // r133: 迁移成员数据中的 group 字段（移除）
-  // r134: 权限体系迁移 — system_owner→admin, 补充 excludeFromSchedule/managedTeams
+  // 成员数据迁移
   let _memberMigrated = false;
   MEMBERS_DATA.forEach(m => {
     if ('group' in m) { delete m.group; _memberMigrated = true; }
-    // r134: system_owner 角色已废弃，统一迁移为 admin
     if (m.role === 'system_owner') { m.role = 'admin'; _memberMigrated = true; }
-    // r134: 补充 excludeFromSchedule 字段（默认 false = 参与排班）
-    if (m.excludeFromSchedule === undefined) {
-      m.excludeFromSchedule = false;
-      _memberMigrated = true;
-    }
-    // r134-fix: 永久管理员参与排班（修正先前误设的 excludeFromSchedule:true）
-    if (m.mis === 'wb_aijunlei' && m.excludeFromSchedule === true) {
-      m.excludeFromSchedule = false;
-      _memberMigrated = true;
-    }
-    // r134: 补充 managedTeams 字段（默认空数组）
+    if (m.excludeFromSchedule === undefined) { m.excludeFromSchedule = false; _memberMigrated = true; }
+    if (m.mis === 'wb_aijunlei' && m.excludeFromSchedule === true) { m.excludeFromSchedule = false; _memberMigrated = true; }
     if (!Array.isArray(m.managedTeams)) { m.managedTeams = []; _memberMigrated = true; }
   });
   if (_memberMigrated) saveMembersData();
@@ -361,42 +499,39 @@ function saveWorktimeTypes()   { _storageSet(STORAGE_KEYS.WORKTIME_TYPES,   WORK
   } else {
     saveQueuesData();
   }
-  // r162: 补全 status 字段（兼容旧数据）
   let _queuePatched = false;
   QUEUES_DATA.forEach(q => {
     if (!q.status) { q.status = 'active'; _queuePatched = true; }
   });
   if (_queuePatched) saveQueuesData();
 
-  // 12. WORKTIME_TYPES（统一工时类型，全部可自定义管理）
+  // 12. WORKTIME_TYPES（统一工时类型）
   const savedWtTypes = _storageGet(STORAGE_KEYS.WORKTIME_TYPES, null);
   if (savedWtTypes && Array.isArray(savedWtTypes)) {
     WORKTIME_TYPES.length = 0;
     savedWtTypes.forEach(t => {
-      // 兼容旧数据：移除已废弃的 builtIn 字段
       delete t.builtIn;
       WORKTIME_TYPES.push(t);
     });
-    // 不再强制补全内置类型——用户删掉就是删掉了
     saveWorktimeTypes();
   } else {
-    // 首次访问：写入默认类型
     saveWorktimeTypes();
   }
 
-  console.log('[storage] 数据恢复完成');
+  console.log('[storage] 数据恢复完成' + (_serverLoaded ? '（服务端模式 + 乐观锁）' : '（本地模式）'));
 })();
 
 // ---------- 清除所有持久化数据（用于重置系统）----------
 function clearAllStorage() {
-  Object.values(STORAGE_KEYS).forEach(k => localStorage.removeItem(k));
+  Object.values(STORAGE_KEYS).forEach(k => {
+    _storageDel(k);
+  });
+  _versionCache = {};
   console.log('[storage] 所有持久化数据已清除，刷新页面后将重新初始化');
 }
 
 // ============================================================
 // 在班天数自定义覆盖（按 "YYYY-M" 分月存储）
-// 结构：{ total: number|null, normal: number|null, triple: number|null }
-// null 表示使用系统自动计算值
 // ============================================================
 
 function _ondutyKey(year, month) {
@@ -412,29 +547,23 @@ function saveOndutyOverride(year, month, data) {
 }
 
 function clearOndutyOverride(year, month) {
-  localStorage.removeItem(_ondutyKey(year, month));
+  _storageDel(_ondutyKey(year, month));
 }
 
 // ============================================================
-// 排班公告（全局，不分月）
-// 结构：[{ id, text, type, status, createdAt, createdBy }]
-// type:   'success' | 'info' | 'warning'
-// status: 'unread'  | 'read' | 'starred' | 'deleted'
+// 排班公告
 // ============================================================
 
-// 默认公告（首次加载时写入）
 const DEFAULT_ANNOUNCEMENTS = [
   { id: 1, text: '本月三星期间（4/4-4/6）已完成排班覆盖', type: 'success', status: 'unread', createdAt: '2026-04-09', createdBy: '艾俊磊' },
   { id: 2, text: '请各团队负责人于每月25日前完成下月排班', type: 'info',    status: 'unread', createdAt: '2026-04-09', createdBy: '艾俊磊' },
 ];
 
-// 运行时公告数组（由 initStorage 初始化）
 let ANNOUNCEMENTS_DATA = [];
 
 (function initAnnouncements() {
   const saved = _storageGet(STORAGE_KEYS.ANNOUNCEMENTS, null);
   if (saved && Array.isArray(saved)) {
-    // 迁移旧数据：补充缺失的 status 字段
     ANNOUNCEMENTS_DATA = saved.map(a => ({ status: 'unread', ...a }));
   } else {
     ANNOUNCEMENTS_DATA = DEFAULT_ANNOUNCEMENTS.map(a => ({ ...a }));
@@ -446,7 +575,6 @@ function saveAnnouncements() {
   _storageSet(STORAGE_KEYS.ANNOUNCEMENTS, ANNOUNCEMENTS_DATA);
 }
 
-// 设置公告状态（unread / read / starred / deleted）
 function setAnnouncementStatus(id, status) {
   const a = ANNOUNCEMENTS_DATA.find(x => x.id === id);
   if (!a) return;
@@ -454,9 +582,7 @@ function setAnnouncementStatus(id, status) {
   saveAnnouncements();
 }
 
-// ===== r120: 考勤通知数据层 =====
-// 结构: { "2026-04": { sent: true, sentAt: timestamp, sentBy: "name",
-//          members: { "1": { read: true, readAt: ts, confirmed: true, confirmedAt: ts }, ... } } }
+// ===== 考勤通知数据层 =====
 function _attNotifyKey(ym) { return STORAGE_KEYS.ATT_NOTIFY + '_' + ym; }
 function loadAttNotify(ym) { return _storageGet(_attNotifyKey(ym), null); }
 function saveAttNotify(ym, data) { _storageSet(_attNotifyKey(ym), data); }

@@ -152,7 +152,7 @@ function _calcTeamStats(members, daysInMonth) {
 function _renderStatRows(team, daysInMonth, dayCounts, teamUsedShifts, statHeaders, tripleDates, isFolded) {
   const shiftKeys = Object.keys(SHIFTS).filter(k => k !== _SHIFT_OFF);
   const foldClass = isFolded ? ' sch-shift-row-collapsed' : '';
-  const foldBtnText = isFolded ? '▶' : '▼';
+  const foldBtnText = isFolded ? '&#9654;' : '&#9660;';
   const foldBtnTitle = isFolded ? '展开班次行' : '折叠班次行';
   const parts = [];
   const cal = _ensureMonthCalendar(scheduleYear, scheduleMonth);
@@ -162,7 +162,7 @@ function _renderStatRows(team, daysInMonth, dayCounts, teamUsedShifts, statHeade
 
   // r96: 读取规则配置，用于关联班次统计的红色告警
   let _savedRules = null;
-  try { _savedRules = JSON.parse(localStorage.getItem('glxt_schedule_rules') || 'null'); } catch(e) { /* ignore */ }
+  try { _savedRules = typeof _storageGetRaw === 'function' ? JSON.parse(_storageGetRaw('glxt_schedule_rules') || 'null') : SCHEDULE_RULES; } catch(e) { /* ignore */ }
   const _teamRule = (_savedRules && _savedRules.teamRules && _savedRules.teamRules[team]) || {};
   const _globalWeekendExempt = _savedRules && _savedRules.weekendExempt !== undefined ? _savedRules.weekendExempt : true;
   const _teamWeekendExempt = _teamRule.weekendExempt !== undefined ? _teamRule.weekendExempt : _globalWeekendExempt;
@@ -185,9 +185,10 @@ function _renderStatRows(team, daysInMonth, dayCounts, teamUsedShifts, statHeade
   // 合计行（含折叠按钮 + hover tooltip）
   parts.push(`<tr class="schedule-stat-summary-row schedule-stat-total-row" data-team-id="${team}">
     <td class="schedule-name-col schedule-stat-label-cell">
-      <span class="schedule-stat-label schedule-stat-label-total">合计
+      <div class="sch-total-label-wrap">
+        <span class="schedule-stat-label schedule-stat-label-total">合计</span>
         <button class="sch-fold-btn" title="${foldBtnTitle}" onclick="toggleScheduleShiftRow(this, '${team}')">${foldBtnText}</button>
-      </span>
+      </div>
     </td>
     ${cal.days.map((dayInfo, i) => {
       const d = dayInfo.day;
@@ -766,7 +767,7 @@ function renderTeamScheduleBlock(team, daysInMonth, today, tripleDates, memberId
   const statHeaderHtml = statHeaders.map((h, hi) => {
     const isFirst = hi === 0;
     const borderLeft = isFirst ? 'border-left:2px solid rgba(0,0,0,0.10);' : '';
-    if (h.isShift) return `<th class="sch-stat-th" rowspan="2" style="${borderLeft}" title="${SHIFTS[h.key]?.name || h.label}"><span class="shift-cell ${h.color}" style="width:24px;height:24px;border-radius:5px;font-size:20px;font-weight:800;display:inline-flex;align-items:center;justify-content:center">${h.label}</span></th>`;
+    if (h.isShift) return `<th class="sch-stat-th" rowspan="2" style="${borderLeft}" title="${SHIFTS[h.key]?.name || h.label}"><span class="shift-cell ${h.color}" style="width:24px;height:24px;border-radius:0;font-size:20px;font-weight:800;display:inline-flex;align-items:center;justify-content:center">${h.label}</span></th>`;
     if (h.isTotal) return `<th class="sch-stat-th sch-stat-th-total sch-stat-sortable" rowspan="2" style="${borderLeft}cursor:pointer" title="合计在班天数（点击排序）" onclick="_sortTeamBy(this,'${team}','total_work')" data-sort-key="total_work">合计<span class="sch-sort-icon">⇅</span></th>`;
     if (h.isLeave) return `<th class="sch-stat-th sch-stat-sortable" rowspan="2" style="${borderLeft}max-width:40px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer" title="${LEAVE_TYPES.find(lt=>'leave_'+lt.id===h.key)?.name||h.label}（点击排序）" onclick="_sortTeamBy(this,'${team}','${h.key}')" data-sort-key="${h.key}">${h.label.length>2?h.label.slice(0,2):h.label}<span class="sch-sort-icon">⇅</span></th>`;
     if (h.isOff) return `<th class="sch-stat-th sch-stat-sortable" rowspan="2" style="${borderLeft}cursor:pointer" title="休息天数（点击排序）" onclick="_sortTeamBy(this,'${team}','off')" data-sort-key="off">休<span class="sch-sort-icon">⇅</span></th>`;
@@ -796,8 +797,8 @@ function renderTeamScheduleBlock(team, daysInMonth, today, tripleDates, memberId
           <thead>
             <!-- r60: 第一行：日期 + 统计列表头 -->
             <tr class="schedule-date-row">
-<th class="schedule-name-col" rowspan="2" style="vertical-align:middle;font-size:22px;font-weight:700;color:#000;text-align:center">
-星期
+<th class="schedule-name-col" style="vertical-align:middle;font-size:16px;font-weight:700;color:#000;text-align:center">
+日期
 </th>
               ${cal.days.map(dayInfo => {
                 const d = dayInfo.day;
@@ -814,6 +815,7 @@ function renderTeamScheduleBlock(team, daysInMonth, today, tripleDates, memberId
             </tr>
             <!-- r60: 第二行：星期X -->
             <tr class="schedule-weekday-row">
+              <th class="schedule-name-col" style="vertical-align:middle;font-size:16px;font-weight:700;color:#000;text-align:center">星期</th>
               ${cal.days.map(dayInfo => {
                 const d = dayInfo.day;
                 const isToday = dayInfo.dateStr === todayStr;
@@ -1025,7 +1027,7 @@ function toggleScheduleShiftRow(btn, teamId) {
   if (shiftRows.length === 0) return;
   const isCollapsed = shiftRows[0].classList.toggle('sch-shift-row-collapsed');
   shiftRows.forEach(row => row.classList.toggle('sch-shift-row-collapsed', isCollapsed));
-  btn.textContent = isCollapsed ? '▶' : '▼';
+  btn.innerHTML = isCollapsed ? '&#9654;' : '&#9660;';
   btn.title = isCollapsed ? '展开班次行' : '折叠班次行';
   scheduleState.foldState[teamId] = isCollapsed;
   _saveFoldState();
@@ -1219,7 +1221,10 @@ function _clearTeamSchedule(team) {
       }
     }
   });
-  saveScheduleData();
+  // 使用同步写入确保数据持久化（防止刷新后恢复旧数据）
+  const _key = _scheduleKey(scheduleYear, scheduleMonth);
+  _storageSet(_key, SCHEDULE_DATA, true);
+  if (typeof _clearAttCache === 'function') _clearAttCache();
   showToast(`已清空「${team}」${scheduleMonth}月排班（${filledCount}个班次）`, 'success');
   renderSchedulePage(document.getElementById('contentArea'));
 }
@@ -1943,9 +1948,9 @@ function detectScheduleAnomalies() {
   const cal = _ensureMonthCalendar(scheduleYear, scheduleMonth);
   const daysInMonth = cal.daysInMonth;
 
-  // 读取自定义规则
+  // 读取自定义规则（通过统一存储层）
   const savedRules = (function() {
-    try { return JSON.parse(localStorage.getItem('glxt_schedule_rules') || 'null'); } catch(e) { return null; }
+    try { return typeof _storageGetRaw === 'function' ? JSON.parse(_storageGetRaw('glxt_schedule_rules') || 'null') : SCHEDULE_RULES; } catch(e) { return null; }
   })();
   const globalMinOnduty     = (savedRules && savedRules.minOndutyPerDay != null)    ? savedRules.minOndutyPerDay    : 5;
   const maxConsecutiveLimit = (savedRules && savedRules.maxConsecutiveDays != null) ? savedRules.maxConsecutiveDays : 6;
@@ -2184,45 +2189,81 @@ function _renderCalendarCard(card) {
     </div>`;
 }
 
-function showCreateCalendarForm() {
-  const allMembers = MEMBERS_DATA.filter(m => !m.excludeFromSchedule);
-  const shiftEntries = Object.entries(SHIFTS).filter(([k]) => k !== _SHIFT_OFF);
+// ===== 按权限分层获取可选成员（admin 全部，leader 管辖团队，reviewer 本团队）=====
+function _getSelectableMembers() {
+  const all = MEMBERS_DATA.filter(m => !m.excludeFromSchedule);
+  const role = CURRENT_USER.role || 'reviewer';
+  if (role === 'admin') return all;
+  if (role === 'leader') {
+    const managed = CURRENT_USER.managedTeams || [];
+    if (managed.length === 0) return all; // 未配置管辖范围则显示全部
+    return all.filter(m => managed.includes(m.team));
+  }
+  // reviewer: 只能看到自己所在团队
+  const myTeam = CURRENT_USER.team || '';
+  return all.filter(m => m.team === myTeam);
+}
 
-  const content = `
+// ===== 按 team 字段动态分组渲染成员选择区（不再硬编码 TEAMS）=====
+function _renderMemberSelectGrid(selectableMembers, checkedIds) {
+  const checkedSet = new Set(checkedIds || []);
+  // 按 team 字段动态分组，保持出现顺序
+  const teamOrder = [];
+  const teamMap = {};
+  selectableMembers.forEach(m => {
+    const t = m.team || '未分组';
+    if (!teamMap[t]) { teamMap[t] = []; teamOrder.push(t); }
+    teamMap[t].push(m);
+  });
+  return teamOrder.map(team => {
+    const members = teamMap[team];
+    const allChecked = members.every(m => checkedSet.has(m.id));
+    return `
+      <div class="cal-form-team-block">
+        <div class="cal-form-team-title">
+          <label style="cursor:pointer;display:flex;align-items:center;gap:4px">
+            <input type="checkbox" class="cal-form-team-all" data-team="${team}" onchange="_toggleCalTeam(this,'${team}')" ${allChecked ? 'checked' : ''}>
+            ${team} <span style="font-size:11px;color:var(--text-tertiary)">(${members.length})</span>
+          </label>
+        </div>
+        <div class="cal-form-team-members">
+          ${members.map(m => `
+            <label class="cal-form-member-item" data-name="${m.name}" data-team="${team}">
+              <input type="checkbox" name="calMembers" value="${m.id}" class="cal-member-chk" data-team="${team}" ${checkedSet.has(m.id) ? 'checked' : ''}>
+              <span>${m.name}</span>
+            </label>
+          `).join('')}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ===== 通用日历表单渲染（新建/编辑共用）=====
+function _renderCalendarForm(opts) {
+  // opts: { name, checkedMemberIds, checkedShiftKeys, checkedLeaveIds, isEdit, disableName }
+  const selectableMembers = _getSelectableMembers();
+  const shiftEntries = Object.entries(SHIFTS).filter(([k]) => k !== _SHIFT_OFF);
+  const shiftSet = new Set(opts.checkedShiftKeys || shiftEntries.map(([k]) => k));
+  const leaveSet = new Set(opts.checkedLeaveIds || LEAVE_TYPES.map(lt => lt.id));
+  const memberCount = (opts.checkedMemberIds || []).length;
+
+  return `
     <div class="cal-form-wrap">
       <div class="form-group">
         <label class="form-label required">日历名称</label>
-        <input type="text" class="form-control" id="calFormName" placeholder="如：周末加班组、临时项目组" maxlength="20">
+        <input type="text" class="form-control" id="calFormName" value="${opts.name || ''}" placeholder="如：周末加班组、临时项目组" maxlength="20" ${opts.disableName ? 'disabled style="background:#F5F7FA;color:#86909C;cursor:not-allowed"' : ''}>
+        ${opts.disableName ? '<div style="font-size:11px;color:#86909C;margin-top:4px">内置团队名称不可修改</div>' : ''}
       </div>
 
       <div class="form-group">
-        <label class="form-label required">团队成员 <span style="font-size:11px;color:var(--text-tertiary);font-weight:400">（从系统成员中选择）</span></label>
+        <label class="form-label required">选择成员 <span style="font-size:11px;color:var(--text-tertiary);font-weight:400">（${CURRENT_USER.role === 'admin' ? '全部成员' : CURRENT_USER.role === 'leader' ? '管辖团队成员' : '本团队成员'}）</span></label>
         <div class="cal-form-member-search">
-          <input type="text" class="form-control" id="calMemberSearch" placeholder="搜索人员..." oninput="_filterCalMembers(this.value)" autocomplete="off" style="margin-bottom:8px">
+          <input type="text" class="form-control" id="calMemberSearch" placeholder="搜索人员姓名..." oninput="_filterCalMembers(this.value)" autocomplete="off" style="margin-bottom:8px">
         </div>
         <div class="cal-form-member-grid" id="calMemberGrid">
-          ${TEAMS.map(team => {
-            const teamMembers = allMembers.filter(m => m.team === team);
-            return `
-              <div class="cal-form-team-block">
-                <div class="cal-form-team-title">
-                  <label style="cursor:pointer;display:flex;align-items:center;gap:4px">
-                    <input type="checkbox" class="cal-form-team-all" data-team="${team}" onchange="_toggleCalTeam(this,'${team}')">
-                    ${team} <span style="font-size:11px;color:var(--text-tertiary)">(${teamMembers.length})</span>
-                  </label>
-                </div>
-                <div class="cal-form-team-members">
-                  ${teamMembers.map(m => `
-                    <label class="cal-form-member-item" data-name="${m.name}" data-team="${team}">
-                      <input type="checkbox" name="calMembers" value="${m.id}" class="cal-member-chk" data-team="${team}">
-                      <span>${m.name}</span>
-                    </label>
-                  `).join('')}
-                </div>
-              </div>`;
-          }).join('')}
+          ${_renderMemberSelectGrid(selectableMembers, opts.checkedMemberIds)}
         </div>
-        <div class="cal-form-selected-count" id="calSelectedCount">已选 0 人</div>
+        <div class="cal-form-selected-count" id="calSelectedCount">已选 ${memberCount} 人</div>
       </div>
 
       <div class="form-group">
@@ -2230,7 +2271,7 @@ function showCreateCalendarForm() {
         <div class="cal-form-shift-grid">
           ${shiftEntries.map(([k, v]) => `
             <label class="cal-form-shift-item">
-              <input type="checkbox" name="calShifts" value="${k}" checked>
+              <input type="checkbox" name="calShifts" value="${k}" ${shiftSet.has(k) ? 'checked' : ''}>
               <span class="shift-cell ${v.color}" style="width:28px;height:28px;border-radius:8px;font-size:12px;font-weight:800">${v.label}</span>
               <span class="cal-form-shift-name">${v.name}</span>
             </label>
@@ -2243,7 +2284,7 @@ function showCreateCalendarForm() {
         <div class="cal-form-leave-grid">
           ${LEAVE_TYPES.map(lt => `
             <label class="cal-form-leave-item">
-              <input type="checkbox" name="calLeaves" value="${lt.id}" checked>
+              <input type="checkbox" name="calLeaves" value="${lt.id}" ${leaveSet.has(lt.id) ? 'checked' : ''}>
               <span>${lt.name}</span>
               <span style="font-size:10px;color:var(--text-tertiary)">${lt.duration === 0.5 ? '半天' : '全天'}</span>
             </label>
@@ -2252,6 +2293,17 @@ function showCreateCalendarForm() {
       </div>
     </div>
   `;
+}
+
+function showCreateCalendarForm() {
+  const content = _renderCalendarForm({
+    name: '',
+    checkedMemberIds: [],
+    checkedShiftKeys: null, // null = 全选
+    checkedLeaveIds: null,  // null = 全选
+    isEdit: false,
+    disableName: false
+  });
 
   openModal('新建排班日历', content, `
     <button class="btn btn-default" onclick="showCalendarManage()">返回</button>
@@ -2270,77 +2322,14 @@ function showEditCalendarForm(calId) {
   const cal = CUSTOM_CALENDARS.find(c => c.id === calId);
   if (!cal) { showToast('日历不存在', 'warning'); return; }
 
-  const allMembers = MEMBERS_DATA.filter(m => !m.excludeFromSchedule);
-  const shiftEntries = Object.entries(SHIFTS).filter(([k]) => k !== _SHIFT_OFF);
-  const memberSet = new Set(cal.memberIds || []);
-  const shiftSet = new Set(cal.shiftKeys || []);
-  const leaveSet = new Set(cal.leaveTypeIds || []);
-
-  const content = `
-    <div class="cal-form-wrap">
-      <div class="form-group">
-        <label class="form-label required">日历名称</label>
-        <input type="text" class="form-control" id="calFormName" value="${cal.name}" placeholder="如：周末加班组、临时项目组" maxlength="20">
-      </div>
-
-      <div class="form-group">
-        <label class="form-label required">团队成员</label>
-        <div class="cal-form-member-search">
-          <input type="text" class="form-control" id="calMemberSearch" placeholder="搜索人员..." oninput="_filterCalMembers(this.value)" autocomplete="off" style="margin-bottom:8px">
-        </div>
-        <div class="cal-form-member-grid" id="calMemberGrid">
-          ${TEAMS.map(team => {
-            const teamMembers = allMembers.filter(m => m.team === team);
-            return `
-              <div class="cal-form-team-block">
-                <div class="cal-form-team-title">
-                  <label style="cursor:pointer;display:flex;align-items:center;gap:4px">
-                    <input type="checkbox" class="cal-form-team-all" data-team="${team}" onchange="_toggleCalTeam(this,'${team}')"
-                      ${teamMembers.every(m => memberSet.has(m.id)) ? 'checked' : ''}>
-                    ${team} <span style="font-size:11px;color:var(--text-tertiary)">(${teamMembers.length})</span>
-                  </label>
-                </div>
-                <div class="cal-form-team-members">
-                  ${teamMembers.map(m => `
-                    <label class="cal-form-member-item" data-name="${m.name}" data-team="${team}">
-                      <input type="checkbox" name="calMembers" value="${m.id}" class="cal-member-chk" data-team="${team}" ${memberSet.has(m.id) ? 'checked' : ''}>
-                      <span>${m.name}</span>
-                    </label>
-                  `).join('')}
-                </div>
-              </div>`;
-          }).join('')}
-        </div>
-        <div class="cal-form-selected-count" id="calSelectedCount">已选 ${memberSet.size} 人</div>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label required">班次类型</label>
-        <div class="cal-form-shift-grid">
-          ${shiftEntries.map(([k, v]) => `
-            <label class="cal-form-shift-item">
-              <input type="checkbox" name="calShifts" value="${k}" ${shiftSet.has(k) ? 'checked' : ''}>
-              <span class="shift-cell ${v.color}" style="width:28px;height:28px;border-radius:8px;font-size:12px;font-weight:800">${v.label}</span>
-              <span class="cal-form-shift-name">${v.name}</span>
-            </label>
-          `).join('')}
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label required">请假类型</label>
-        <div class="cal-form-leave-grid">
-          ${LEAVE_TYPES.map(lt => `
-            <label class="cal-form-leave-item">
-              <input type="checkbox" name="calLeaves" value="${lt.id}" ${leaveSet.has(lt.id) ? 'checked' : ''}>
-              <span>${lt.name}</span>
-              <span style="font-size:10px;color:var(--text-tertiary)">${lt.duration === 0.5 ? '半天' : '全天'}</span>
-            </label>
-          `).join('')}
-        </div>
-      </div>
-    </div>
-  `;
+  const content = _renderCalendarForm({
+    name: cal.name || '',
+    checkedMemberIds: cal.memberIds || [],
+    checkedShiftKeys: cal.shiftKeys || [],
+    checkedLeaveIds: cal.leaveTypeIds || [],
+    isEdit: true,
+    disableName: false
+  });
 
   openModal('编辑排班日历 - ' + cal.name, content, `
     <button class="btn btn-default" onclick="showCalendarManage()">返回</button>
@@ -2363,79 +2352,20 @@ function showEditBuiltinCalendarForm(builtinId) {
   // 读取已存储的覆盖设置（如果有）
   const override = CUSTOM_CALENDARS.find(c => c.builtinTeam === teamName);
   const allMembers = MEMBERS_DATA.filter(m => !m.excludeFromSchedule);
-  const shiftEntries = Object.entries(SHIFTS).filter(([k]) => k !== _SHIFT_OFF);
   // 默认成员：该团队所有人
   const defaultMemberIds = allMembers.filter(m => m.team === teamName).map(m => m.id);
-  const memberSet = new Set(override ? override.memberIds : defaultMemberIds);
-  const shiftSet = new Set(override ? override.shiftKeys : Object.keys(SHIFTS));
-  const leaveSet = new Set(override ? override.leaveTypeIds : LEAVE_TYPES.map(lt => lt.id));
+  const memberIds = override ? override.memberIds : defaultMemberIds;
+  const shiftKeys = override ? override.shiftKeys : Object.keys(SHIFTS);
+  const leaveIds = override ? override.leaveTypeIds : LEAVE_TYPES.map(lt => lt.id);
 
-  const content = `
-    <div class="cal-form-wrap">
-      <div class="form-group">
-        <label class="form-label">团队名称</label>
-        <input type="text" class="form-control" value="${teamName}" disabled style="background:#F5F7FA;color:#86909C;cursor:not-allowed">
-        <div style="font-size:11px;color:#86909C;margin-top:4px">内置团队名称不可修改</div>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label required">团队成员 <span style="font-size:11px;color:var(--text-tertiary);font-weight:400">（可调整显示哪些成员）</span></label>
-        <div class="cal-form-member-search">
-          <input type="text" class="form-control" id="calMemberSearch" placeholder="搜索人员..." oninput="_filterCalMembers(this.value)" autocomplete="off" style="margin-bottom:8px">
-        </div>
-        <div class="cal-form-member-grid" id="calMemberGrid">
-          ${TEAMS.map(team => {
-            const teamMembers = allMembers.filter(m => m.team === team);
-            return `
-              <div class="cal-form-team-block">
-                <div class="cal-form-team-title">
-                  <label style="cursor:pointer;display:flex;align-items:center;gap:4px">
-                    <input type="checkbox" class="cal-form-team-all" data-team="${team}" onchange="_toggleCalTeam(this,'${team}')"
-                      ${teamMembers.every(m => memberSet.has(m.id)) ? 'checked' : ''}>
-                    ${team} <span style="font-size:11px;color:var(--text-tertiary)">(${teamMembers.length})</span>
-                  </label>
-                </div>
-                <div class="cal-form-team-members">
-                  ${teamMembers.map(m => `
-                    <label class="cal-form-member-item" data-name="${m.name}" data-team="${team}">
-                      <input type="checkbox" name="calMembers" value="${m.id}" class="cal-member-chk" data-team="${team}" ${memberSet.has(m.id) ? 'checked' : ''}>
-                      <span>${m.name}</span>
-                    </label>
-                  `).join('')}
-                </div>
-              </div>`;
-          }).join('')}
-        </div>
-        <div class="cal-form-selected-count" id="calSelectedCount">已选 ${memberSet.size} 人</div>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label required">班次类型</label>
-        <div class="cal-form-shift-grid">
-          ${shiftEntries.map(([k, v]) => `
-            <label class="cal-form-shift-item">
-              <input type="checkbox" name="calShifts" value="${k}" ${shiftSet.has(k) ? 'checked' : ''}>
-              <span class="shift-cell ${v.color}" style="width:28px;height:28px;border-radius:8px;font-size:12px;font-weight:800">${v.label}</span>
-              <span class="cal-form-shift-name">${v.name}</span>
-            </label>
-          `).join('')}
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label required">请假类型</label>
-        <div class="cal-form-leave-grid">
-          ${LEAVE_TYPES.map(lt => `
-            <label class="cal-form-leave-item">
-              <input type="checkbox" name="calLeaves" value="${lt.id}" ${leaveSet.has(lt.id) ? 'checked' : ''}>
-              <span>${lt.name}</span>
-              <span style="font-size:10px;color:var(--text-tertiary)">${lt.duration === 0.5 ? '半天' : '全天'}</span>
-            </label>
-          `).join('')}
-        </div>
-      </div>
-    </div>
-  `;
+  const content = _renderCalendarForm({
+    name: teamName,
+    checkedMemberIds: memberIds,
+    checkedShiftKeys: shiftKeys,
+    checkedLeaveIds: leaveIds,
+    isEdit: true,
+    disableName: true
+  });
 
   openModal('编辑内置日历 — ' + teamName, content, `
     <button class="btn btn-default" onclick="showCalendarManage()">返回</button>
@@ -2476,17 +2406,19 @@ function saveEditBuiltinCalendar(teamName) {
   } else {
     CUSTOM_CALENDARS.push(calObj);
   }
-  saveCustomCalendars();
+  saveCustomCalendars(true);
   addWorkLog('考勤系统', '内置日历修改', `编辑内置日历「${teamName}」，${memberIds.length} 人`);
+  closeModal();
   showToast(`内置日历「${teamName}」已更新`, 'success');
-  showCalendarManage();
+  const area = document.getElementById('contentArea');
+  if (area) renderSchedulePage(area);
 }
 
 function resetBuiltinCalendar(teamName) {
   const idx = CUSTOM_CALENDARS.findIndex(c => c.builtinTeam === teamName);
   if (idx >= 0) {
     CUSTOM_CALENDARS.splice(idx, 1);
-    saveCustomCalendars();
+    saveCustomCalendars(true);
     addWorkLog('考勤系统', '内置日历重置', `恢复内置日历「${teamName}」为默认设置`);
     showToast(`「${teamName}」已恢复默认`, 'success');
   }
@@ -2527,10 +2459,12 @@ function _doDeleteBuiltinCalendar(teamName) {
       updatedAt: new Date().toISOString(),
     });
   }
-  saveCustomCalendars();
+  saveCustomCalendars(true);
   addWorkLog('考勤系统', '日历删除', `隐藏内置日历「${teamName}」`);
+  closeModal();
   showToast(`排班日历「${teamName}」已删除`, 'success');
-  showCalendarManage();
+  const area = document.getElementById('contentArea');
+  if (area) renderSchedulePage(area);
 }
 
 // 恢复已隐藏的内置日历
@@ -2538,7 +2472,7 @@ function restoreBuiltinCalendar(teamName) {
   const idx = CUSTOM_CALENDARS.findIndex(c => c.builtinTeam === teamName && c.hidden);
   if (idx >= 0) {
     CUSTOM_CALENDARS.splice(idx, 1);
-    saveCustomCalendars();
+    saveCustomCalendars(true);
     addWorkLog('考勤系统', '日历恢复', `恢复内置日历「${teamName}」`);
     showToast(`「${teamName}」已恢复`, 'success');
   }
@@ -2596,10 +2530,15 @@ function saveNewCalendar() {
     leaveTypeIds: leaveTypeIds,
     createdAt: new Date().toISOString(),
   });
-  saveCustomCalendars();
+  // 使用同步写入确保数据持久化，防止刷新后丢失
+  saveCustomCalendars(true);
   addWorkLog('考勤系统', '日历新建', `新建排班日历「${name}」，${memberIds.length} 人`);
-  showToast(`排班日历「${name}」已创建`, 'success');
-  showCalendarManage();
+  // 关闭弹窗并显示成功提示，让用户清楚看到反馈
+  closeModal();
+  showToast(`排班日历「${name}」创建成功！`, 'success');
+  // 刷新排班页面以显示新日历卡片
+  const area = document.getElementById('contentArea');
+  if (area) renderSchedulePage(area);
 }
 
 function saveEditCalendar(calId) {
@@ -2628,10 +2567,13 @@ function saveEditCalendar(calId) {
   cal.memberIds = memberIds;
   cal.shiftKeys = shiftKeys;
   cal.leaveTypeIds = leaveTypeIds;
-  saveCustomCalendars();
-  addWorkLog('考勤系统', '日历修改', `修改排班日历「${name}」`);
+  cal.updatedAt = new Date().toISOString();
+  saveCustomCalendars(true);
+  addWorkLog('考勤系统', '日历修改', `修改排班日历「${name}」，${memberIds.length} 人`);
+  closeModal();
   showToast(`排班日历「${name}」已更新`, 'success');
-  showCalendarManage();
+  const area = document.getElementById('contentArea');
+  if (area) renderSchedulePage(area);
 }
 
 function deleteCalendarCard(calId) {
@@ -2660,10 +2602,12 @@ function _doDeleteCalendar(calId) {
   if (idx === -1) return;
   const name = CUSTOM_CALENDARS[idx].name;
   CUSTOM_CALENDARS.splice(idx, 1);
-  saveCustomCalendars();
+  saveCustomCalendars(true);
   addWorkLog('考勤系统', '日历删除', `删除排班日历「${name}」`);
+  closeModal();
   showToast(`排班日历「${name}」已删除`, 'success');
-  showCalendarManage();
+  const area = document.getElementById('contentArea');
+  if (area) renderSchedulePage(area);
 }
 
 // 获取自定义日历对应的虚拟团队名（用于 renderTeamScheduleBlock）
@@ -3718,15 +3662,17 @@ function _importConfirm() {
 // === 导入历史 ===
 function _saveImportHistory(entry) {
   try {
-    const history = JSON.parse(localStorage.getItem(_IMPORT_HISTORY_KEY) || '[]');
+    const raw = typeof _storageGetRaw === 'function' ? _storageGetRaw(_IMPORT_HISTORY_KEY) : localStorage.getItem(_IMPORT_HISTORY_KEY);
+    const history = JSON.parse(raw || '[]');
     history.unshift(entry);
     if (history.length > _IMPORT_HISTORY_MAX) history.length = _IMPORT_HISTORY_MAX;
-    localStorage.setItem(_IMPORT_HISTORY_KEY, JSON.stringify(history));
+    if (typeof _storageSetRaw === 'function') _storageSetRaw(_IMPORT_HISTORY_KEY, JSON.stringify(history));
+    else localStorage.setItem(_IMPORT_HISTORY_KEY, JSON.stringify(history));
   } catch(e) { console.warn('[import history] save error:', e); }
 }
 function showImportHistory() {
   let history = [];
-  try { history = JSON.parse(localStorage.getItem(_IMPORT_HISTORY_KEY) || '[]'); } catch(e) {}
+  try { const raw = typeof _storageGetRaw === 'function' ? _storageGetRaw(_IMPORT_HISTORY_KEY) : localStorage.getItem(_IMPORT_HISTORY_KEY); history = JSON.parse(raw || '[]'); } catch(e) {}
   let content = '';
   if (history.length === 0) {
     content = '<div class="import-history-empty">暂无导入记录</div>';
@@ -3750,12 +3696,12 @@ function showImportHistory() {
 }
 function _rollbackImport(index) {
   let history = [];
-  try { history = JSON.parse(localStorage.getItem(_IMPORT_HISTORY_KEY) || '[]'); } catch(e) {}
+  try { const raw = typeof _storageGetRaw === 'function' ? _storageGetRaw(_IMPORT_HISTORY_KEY) : localStorage.getItem(_IMPORT_HISTORY_KEY); history = JSON.parse(raw || '[]'); } catch(e) {}
   const entry = history[index];
   if (!entry) { showToast('找不到该记录', 'warning'); return; }
   if (!confirm(`确定要回滚 ${entry.year}年${entry.month}月 的导入操作吗？\n这将恢复到导入前的排班数据。`)) return;
   const key = `glxt_schedule_${entry.year}_${entry.month}`;
-  _storageSet(key, entry.snapshot);
+  _storageSet(key, entry.snapshot, true);
   if (entry.year === scheduleYear && entry.month === scheduleMonth) {
     Object.keys(entry.snapshot).forEach(mid => {
       SCHEDULE_DATA[mid] = SCHEDULE_DATA[mid] || {};
@@ -3763,9 +3709,11 @@ function _rollbackImport(index) {
     });
     renderSchedulePage(document.getElementById('contentArea'));
   }
+  if (typeof _clearAttCache === 'function') _clearAttCache();
   // 移除这条历史
   history.splice(index, 1);
-  localStorage.setItem(_IMPORT_HISTORY_KEY, JSON.stringify(history));
+  if (typeof _storageSetRaw === 'function') _storageSetRaw(_IMPORT_HISTORY_KEY, JSON.stringify(history));
+  else localStorage.setItem(_IMPORT_HISTORY_KEY, JSON.stringify(history));
   closeModal();
   showToast(`已回滚 ${entry.year}年${entry.month}月排班数据`, 'success');
 }
@@ -4299,7 +4247,7 @@ function toggleOndutyDetail(e) {
 // ===== 排班规则编辑弹窗 =====
 function showEditRulesModal() {
   const savedRules = (function() {
-    try { return JSON.parse(localStorage.getItem('glxt_schedule_rules') || 'null'); } catch(e) { return null; }
+    try { return typeof _storageGetRaw === 'function' ? JSON.parse(_storageGetRaw('glxt_schedule_rules') || 'null') : SCHEDULE_RULES; } catch(e) { return null; }
   })();
   // 兜底：savedRules 为 null 或空对象（缺少关键字段）时使用默认值
   const rules = (savedRules && savedRules.minOndutyPerDay != null)
@@ -4629,9 +4577,9 @@ function saveScheduleRules() {
   });
   // 清除可能存在的脏数据（空对象 {}）
   try {
-    const _existing = JSON.parse(localStorage.getItem('glxt_schedule_rules') || 'null');
+    const _existing = typeof _storageGetRaw === 'function' ? JSON.parse(_storageGetRaw('glxt_schedule_rules') || 'null') : null;
     if (_existing && typeof _existing === 'object' && Object.keys(_existing).length === 0) {
-      localStorage.removeItem('glxt_schedule_rules');
+      if (typeof _storageDel === 'function') _storageDel('glxt_schedule_rules');
     }
   } catch(e) { /* ignore */ }
   const rules = {
@@ -4643,7 +4591,7 @@ function saveScheduleRules() {
   // storage.js 的 initStorage 会从 SCHEDULE_RULES 对象恢复，必须保持两者一致
   Object.keys(SCHEDULE_RULES).forEach(k => delete SCHEDULE_RULES[k]);
   Object.assign(SCHEDULE_RULES, rules);
-  localStorage.setItem('glxt_schedule_rules', JSON.stringify(rules));
+  saveScheduleRules();
   addWorkLog('考勤系统', '规则修改', `更新排班规则：全局最少${globalMin}人/天，最大连续${maxConsecutive}天`);
   closeModal();
   showToast('排班规则已保存', 'success');
@@ -5059,7 +5007,7 @@ const LEGEND_STORAGE_KEY = 'glxt_legend_config';
 
 function getLegendConfig() {
   try {
-    const raw = localStorage.getItem(LEGEND_STORAGE_KEY);
+    const raw = typeof _storageGetRaw === 'function' ? _storageGetRaw(LEGEND_STORAGE_KEY) : localStorage.getItem(LEGEND_STORAGE_KEY);
     if (raw) return JSON.parse(raw);
   } catch(e) {}
   // 默认：所有班次 + 前2个请假类型（排除病假）
@@ -5070,7 +5018,8 @@ function getLegendConfig() {
 }
 
 function saveLegendConfig(cfg) {
-  localStorage.setItem(LEGEND_STORAGE_KEY, JSON.stringify(cfg));
+  if (typeof _storageSetRaw === 'function') _storageSetRaw(LEGEND_STORAGE_KEY, JSON.stringify(cfg));
+  else localStorage.setItem(LEGEND_STORAGE_KEY, JSON.stringify(cfg));
 }
 
 function showLegendEditModal() {

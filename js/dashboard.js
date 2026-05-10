@@ -24,66 +24,91 @@ function renderDashboardPage(container) {
       </div>
     </div>
 
-    <!-- 关联后台快捷入口 -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">
-      <a class="external-link-card" href="https://bi.sankuai.com/dashboard/171551" target="_blank">
-        <div class="external-link-icon">📊</div>
-        <div class="external-link-info">
-          <div class="external-link-title">BI看板 171551</div>
-          <div class="external-link-url">bi.sankuai.com</div>
+    <!-- 关联后台快捷入口（可折叠） -->
+    <div class="ext-links-panel" id="extLinksPanel">
+      <button class="ext-links-toggle" onclick="toggleExtLinks()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        <span>关联后台入口</span>
+        <svg class="ext-links-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      </button>
+      <div class="ext-links-body" id="extLinksBody" style="display:none">
+        <div class="ext-links-grid">
+          <a class="external-link-card" href="https://bi.sankuai.com/dashboard/171551" target="_blank">
+            <div class="external-link-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
+            <div class="external-link-info">
+              <div class="external-link-title">BI看板 171551</div>
+              <div class="external-link-url">bi.sankuai.com</div>
+            </div>
+            <svg class="external-link-arrow" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 7H11M8 4L11 7L8 10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+          </a>
+          <a class="external-link-card" href="https://dpaudit.sankuai.com/content/contentPartition/delineateTaskList" target="_blank">
+            <div class="external-link-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FF7D00" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
+            <div class="external-link-info">
+              <div class="external-link-title">审核后台</div>
+              <div class="external-link-url">dpaudit.sankuai.com</div>
+            </div>
+            <svg class="external-link-arrow" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 7H11M8 4L11 7L8 10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+          </a>
+          <a class="external-link-card" href="https://bi.sankuai.com/dashboard/111337" target="_blank">
+            <div class="external-link-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00B42A" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+            <div class="external-link-info">
+              <div class="external-link-title">BI看板 111337</div>
+              <div class="external-link-url">bi.sankuai.com</div>
+            </div>
+            <svg class="external-link-arrow" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 7H11M8 4L11 7L8 10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+          </a>
+          <a class="external-link-card" href="https://bi.sankuai.com/dashboard/209057" target="_blank">
+            <div class="external-link-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#722ED1" stroke-width="2"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg></div>
+            <div class="external-link-info">
+              <div class="external-link-title">BI看板 209057</div>
+              <div class="external-link-url">bi.sankuai.com</div>
+            </div>
+            <svg class="external-link-arrow" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 7H11M8 4L11 7L8 10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+          </a>
         </div>
-        <svg class="external-link-arrow" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 7H11M8 4L11 7L8 10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
-      </a>
-      <a class="external-link-card" href="https://dpaudit.sankuai.com/content/contentPartition/delineateTaskList" target="_blank">
-        <div class="external-link-icon">🔍</div>
-        <div class="external-link-info">
-          <div class="external-link-title">审核后台</div>
-          <div class="external-link-url">dpaudit.sankuai.com</div>
-        </div>
-        <svg class="external-link-arrow" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 7H11M8 4L11 7L8 10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
-      </a>
-      <a class="external-link-card" href="https://bi.sankuai.com/dashboard/111337" target="_blank">
-        <div class="external-link-icon">📈</div>
-        <div class="external-link-info">
-          <div class="external-link-title">BI看板 111337</div>
-          <div class="external-link-url">bi.sankuai.com</div>
-        </div>
-        <svg class="external-link-arrow" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 7H11M8 4L11 7L8 10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
-      </a>
-      <a class="external-link-card" href="https://bi.sankuai.com/dashboard/209057" target="_blank">
-        <div class="external-link-icon">📉</div>
-        <div class="external-link-info">
-          <div class="external-link-title">BI看板 209057</div>
-          <div class="external-link-url">bi.sankuai.com</div>
-        </div>
-        <svg class="external-link-arrow" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 7H11M8 4L11 7L8 10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
-      </a>
+      </div>
     </div>
 
-    <!-- KPI卡片 -->
+    <!-- KPI卡片（增强信息密度） -->
     <div class="kpi-grid">
       <div class="kpi-card green" onclick="showQualityDetail()">
         <div class="kpi-label">团队质量准确率</div>
         <div class="kpi-value">${avgQuality}<span>%</span></div>
-        <div class="kpi-trend up">↑ 0.3% 较昨日</div>
+        <div class="kpi-progress"><div class="kpi-progress-fill" style="width:${Math.min(parseFloat(avgQuality), 100)}%;background:#00B42A"></div></div>
+        <div class="kpi-trend up">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 8L6 4L10 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          0.3% 较昨日
+        </div>
         <div class="kpi-sub">目标 ≥ 97%</div>
       </div>
       <div class="kpi-card" onclick="showEfficiencyDetail()">
         <div class="kpi-label">团队平均人效</div>
         <div class="kpi-value">${avgEfficiency}<span>/天</span></div>
-        <div class="kpi-trend down">↓ 5 较昨日</div>
+        <div class="kpi-progress"><div class="kpi-progress-fill" style="width:${Math.min(avgEfficiency / 400 * 100, 100)}%;background:var(--primary)"></div></div>
+        <div class="kpi-trend down">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 4L6 8L10 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          5 较昨日
+        </div>
         <div class="kpi-sub">修正人效 ${Math.round(avgEfficiency * 0.75)}/天</div>
       </div>
       <div class="kpi-card orange" onclick="showOutRateDetail()">
         <div class="kpi-label">审出率</div>
         <div class="kpi-value">${outRate}<span>%</span></div>
-        <div class="kpi-trend flat">→ 持平</div>
+        <div class="kpi-progress"><div class="kpi-progress-fill" style="width:${Math.min(parseFloat(outRate), 100)}%;background:#FF7D00"></div></div>
+        <div class="kpi-trend flat">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6H10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          持平
+        </div>
         <div class="kpi-sub">进审 ${formatNum(totalInReview)} / 审出 ${formatNum(totalOutReview)}</div>
       </div>
       <div class="kpi-card red" onclick="showBacklogDetail()">
         <div class="kpi-label">当前积压量</div>
         <div class="kpi-value">${formatNum(totalBacklog)}</div>
-        <div class="kpi-trend down">↑ 1.2k 较昨日</div>
+        <div class="kpi-progress"><div class="kpi-progress-fill" style="width:${Math.min(totalBacklog / 50000 * 100, 100)}%;background:#F53F3F"></div></div>
+        <div class="kpi-trend down">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 4L6 8L10 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          1.2k 较昨日
+        </div>
         <div class="kpi-sub">高风险队列 ${QUEUES_DATA.filter(q=>q.backlog>3000).length} 个</div>
       </div>
     </div>
@@ -252,6 +277,15 @@ function renderDashboardPage(container) {
 function setTimeRange(range) {
   dashboardTimeRange = range;
   renderDashboardPage(document.getElementById('contentArea'));
+}
+
+function toggleExtLinks() {
+  var body = document.getElementById('extLinksBody');
+  var panel = document.getElementById('extLinksPanel');
+  if (!body) return;
+  var isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : 'block';
+  if (panel) panel.classList.toggle('open', !isOpen);
 }
 
 function filterDashTable(team) {
