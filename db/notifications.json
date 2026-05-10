@@ -588,5 +588,15 @@
     "relatedId": "moy852qrhszy5ckz",
     "isRead": false,
     "createdAt": "2026-05-10T03:34:23.828Z"
+  },
+  {
+    "id": "moz82lvtvn3je4x9",
+    "userId": "moy844mwg0vh3uhk",
+    "title": "新的加班申请待审批",
+    "content": "艾俊磊 提交了 2026-05-09 的加班申请（队列加班：洒水大·），时长3小时，请审批。",
+    "type": "record_submitted",
+    "relatedId": "moz82lvqz0fz3yr4",
+    "isRead": false,
+    "createdAt": "2026-05-10T03:37:40.937Z"
   }
 ]
